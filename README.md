@@ -7,7 +7,10 @@
 
 Our goal is to support science-informed decision-making that helps preserve biodiversity and ecological resilience in one of California’s most unique and biologically rich landscapes.
 
-## Students
+## Structure of the repository
 
-test
-Wenxin Yang
+- **code/**: Contains all scripts and source code.
+- **data/**: Stores lightweight datasets. Larger datasets are hosted separately on Google Drive.
+- **doc/**: Includes all documentation files.
+
+Each folder includes a `.gitignore` file specifying folder-specific exclusions and a `README.md` file providing relevant documentation.
