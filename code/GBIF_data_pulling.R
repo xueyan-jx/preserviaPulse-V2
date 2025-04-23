@@ -1,6 +1,7 @@
-
-## Code from Lei to connect local R with GBIF API
-## Removed personal directory and login information
+## Purpose of script: grab GBIF data
+## Authors: GEOG 274
+## Date: Spring, 2025
+## Credits to: Dr. Lei Song (lsong@ucsb.edu)
 
 # Materials:
 #   https://docs.ropensci.org/rgbif/index.html
@@ -10,8 +11,6 @@
 #. https://data-blog.gbif.org/post/downloading-long-species-lists-on-gbif/
 
 
-# test comment
-
 ########### Setting ##############
 # Install and load packages
 install.packages("rgbif")
@@ -19,16 +18,20 @@ library(here)
 library(sf)
 library(dplyr)
 library(rgbif)
+library(googledrive)
+library(googlesheets4)
 
 # Set a directory for data
-occ_dir <- here("~/local_directory_path_here") # update with local path
-if (!dir.exists(occ_dir)) dir.create(occ_dir)
+here() # first check path
+occ_dir <- here("data/occurrences") # create a data folder with relative path
+file.path(occ_dir) # double check its absolute path
+if (!dir.exists(occ_dir)) dir.create(occ_dir) # if it's not there already, create it
 
 ########### Pre-processing ##############
 # Confirm names used in GBIF database for your species list
 scientific_names <- c("Deinandra increscens ssp. Villosa",
                       "Eriodictyon capitatum")
-gbif_names <- name_backbone_checklist(dat$`Name (Latin)`)
+gbif_names <- name_backbone_checklist(scientific_names)
 
 # But if you don't know the exact scientific names
 nm <- "Grasshopper sparrow"
@@ -61,10 +64,11 @@ occ_meta <- occ_download(
   pred("hasGeospatialIssue", FALSE),
   pred_not(pred_in("basisOfRecord",
                    c("FOSSIL_SPECIMEN", "LIVING_SPECIMEN"))),
-  format = "SIMPLE_CSV",
-  user = "user",      # Replace with your actual username
-  pwd = "pwd",       # Replace with your actual password
-  email = "email"  # Replace with your registered email
+  format = "SIMPLE_CSV"
+  # if you've already put info in .Renviron, no need to use these arguments
+  #user = usr,      # Replace with your actual username
+  #pwd = "pwd",       # Replace with your actual password
+  #email = "email"  # Replace with your registered email
 )
 
 # Save out the name catalog using the GBIF query unique ID in name to pair.
@@ -86,22 +90,24 @@ if (status$status == "SUCCEEDED"){
 ################ If want to get occurrence for a species list #######
 ################       Same settings as above        ################
 ################       1. Get species list   ########################
-library(googledrive)
-library(googlesheets4)
 
-# Authoritization
+# Authorization to Google Drive
 drive_auth()
 gs4_auth(token = drive_token())
 
-# Get data
+# Get data from the spreadsheet
 ss <- drive_get("Special Status Species")
 
 ## E.g. sheet names
 ss_meta <- gs4_get(ss) 
 sheet_names <- ss_meta$sheets$name
 
-dat <- read_sheet(ss, sheet = sheet_names[1])
+dat <- read_sheet(ss, sheet = sheet_names[2]) # Select the taxa you're working on
 head(dat)
+
+# for birds, we assigned individuals to different species so we subset the data frame
+# skip the following line if you're not working on birds...
+# dat <- dat %>% filter(Name=='Wenxin') # replace with your name
 
 # Get species' names
 scientific_names_df <- dat[, c("Name (common)", "Name (Latin)")]
@@ -128,11 +134,12 @@ occ_meta <- occ_download(
   pred("hasCoordinate", TRUE), pred("hasGeospatialIssue", FALSE),
   pred_not(pred_in("basisOfRecord",
                    c("FOSSIL_SPECIMEN","LIVING_SPECIMEN"))),
-  format = "SIMPLE_CSV",
-  user = "user",      # Replace with your actual username
-  pwd = "pwd",       # Replace with your actual password
-  email = "email"  # Replace with your registered email
-  )
+  format = "SIMPLE_CSV"
+  # if you've already put info in .Renviron, no need to use these arguments
+  #user = "user",      # Replace with your actual username
+  #pwd = "pwd",       # Replace with your actual password
+  #email = "email"  # Replace with your registered email
+)
 
 # Save out the name catalog using the GBIF query unique ID in name to pair.
 write.csv(gbif_names, 
