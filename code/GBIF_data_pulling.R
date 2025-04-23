@@ -11,6 +11,7 @@
 
 
 # test comment
+# test 2
 
 ########### Setting ##############
 # Install and load packages
@@ -28,7 +29,7 @@ if (!dir.exists(occ_dir)) dir.create(occ_dir)
 # Confirm names used in GBIF database for your species list
 scientific_names <- c("Deinandra increscens ssp. Villosa",
                       "Eriodictyon capitatum")
-gbif_names <- name_backbone_checklist(dat$`Name (Latin)`)
+gbif_names <- name_backbone_checklist(scientific_names)
 
 # But if you don't know the exact scientific names
 nm <- "Grasshopper sparrow"
