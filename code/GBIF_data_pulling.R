@@ -9,6 +9,9 @@
 #  https://data-blog.gbif.org/post/gbif-filtering-guide/
 #. https://data-blog.gbif.org/post/downloading-long-species-lists-on-gbif/
 
+
+# test comment
+
 ########### Setting ##############
 # Install and load packages
 install.packages("rgbif")
