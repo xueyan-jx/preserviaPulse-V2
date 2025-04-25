@@ -148,7 +148,8 @@ if (status$status == "SUCCEEDED"){
   d <- NULL
 }
 
-# Check if the downloaded data include all species in our list
+
+# Check if the downloaded data includes all species in our list
 download_gbif <- read.csv("change this to your path for the downloaded occurrence.csv", stringsAsFactors = FALSE)
 
 unique_species <- unique(download_gbif$taxonKey)
