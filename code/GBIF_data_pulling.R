@@ -147,3 +147,18 @@ if (status$status == "SUCCEEDED"){
   warning(sprintf("The request %s.", status$status))
   d <- NULL
 }
+
+# Check if the downloaded data include all species in our list
+download_gbif <- read.csv("change this to your path for the downloaded occurrence.csv", stringsAsFactors = FALSE)
+
+unique_species <- unique(download_gbif$taxonKey)
+length(unique_species)
+
+missing_from_list <- setdiff(gbif_names$usageKey, unique_species)
+print(missing_from_list)
+# 3691920 5699909
+
+# Find the missing species
+missing_species_names <- gbif_names$canonicalName[gbif_names$usageKey %in% missing_from_list]
+print(missing_species_names)
+#"Erysimum suffrutescens grandifolium" "Malacothrix incana succulenta"
