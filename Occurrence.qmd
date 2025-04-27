@@ -94,3 +94,9 @@ if (status$status == "SUCCEEDED"){
   d <- NULL
 }
 ```
+
+```{r}
+# Clip data to target counties 
+install.packages("tigris")
+install.packages("sf")
+```
