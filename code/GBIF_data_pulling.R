@@ -149,6 +149,7 @@ if (status$status == "SUCCEEDED"){
 }
 
 
+
 # Check if the downloaded data includes all species in our list
 download_gbif <- read.csv("change this to your path for the downloaded occurrence.csv", stringsAsFactors = FALSE)
 
@@ -163,3 +164,38 @@ print(missing_from_list)
 missing_species_names <- gbif_names$canonicalName[gbif_names$usageKey %in% missing_from_list]
 print(missing_species_names)
 #"Erysimum suffrutescens grandifolium" "Malacothrix incana succulenta"
+
+
+
+# Clip data to target counties
+install.packages("tigris") # for download county boundary
+library(tigris)
+
+# Read the downloaded data
+download_gbif <- read.csv("change this to your path for the downloaded occurrence.csv", stringsAsFactors = FALSE)
+
+ca_counties <- counties(state = "CA", cb = TRUE)
+target_counties <- ca_counties %>%
+  filter(NAME %in% c("Santa Barbara", "Ventura", "San Luis Obispo"))
+
+# Convert .csv occurrence data to sf object (spatial data)
+occ_sf <- st_as_sf(download_gbif, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+
+# Keep same coordinate reference system
+occ_sf <- st_transform(occ_sf, st_crs(target_counties))
+
+# Clip to target counties
+occ_in_target <- st_intersection(occ_sf, target_counties)
+
+# Check data distribution
+plot(st_geometry(target_counties), col = "lightblue", border = "black", main = "GBIF Data Points within Target Counties")
+plot(st_geometry(occ_in_target), add = TRUE, col = "red", pch = 20)
+
+coordinates <- st_coordinates(occ_in_target)
+occ_in_target_df <- as.data.frame(occ_in_target)
+occ_in_target_df$decimalLongitude <- coordinates[, 1] 
+occ_in_target_df$decimalLatitude <- coordinates[, 2]  
+
+write.csv(occ_in_target_df, 
+          file.path(occ_dir, "Plant-Gbif-occ-targetCounty.csv"),
+          row.names = FALSE)
