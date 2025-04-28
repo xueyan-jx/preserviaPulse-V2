@@ -15,6 +15,7 @@
 # Install and load packages
 install.packages("rgbif")
 install.packages("tigris")
+install.packages("googlesheets4")
 library(here)
 library(sf)
 library(dplyr)
@@ -31,8 +32,12 @@ if (!dir.exists(occ_dir)) dir.create(occ_dir) # if it's not there already, creat
 
 ########### Pre-processing ##############
 # Confirm names used in GBIF database for your species list
-scientific_names <- c("Deinandra increscens ssp. Villosa",
-                      "Eriodictyon capitatum")
+scientific_names <- c("Danaus plexippus",
+                      "Ammopelmatus muwu",
+                      "Haliotis cracherodii",
+                      "Actinemys marmorata",
+                      "Rana draytonii",
+                      "Thamnophis hammondii")
 gbif_names <- name_backbone_checklist(scientific_names)
 
 # But if you don't know the exact scientific names
@@ -66,7 +71,10 @@ occ_meta <- occ_download(
   pred("hasGeospatialIssue", FALSE),
   pred_not(pred_in("basisOfRecord",
                    c("FOSSIL_SPECIMEN", "LIVING_SPECIMEN"))),
-  format = "SIMPLE_CSV"
+  format = "SIMPLE_CSV",
+  user = "izzylopez",
+  pwd = "keegan01",
+  email = "izzylopez@ucsb.edu"
   # if you've already put info in .Renviron, no need to use these arguments
   #user = "usr",      # Replace with your actual username
   #pwd = "pwd",       # Replace with your actual password
