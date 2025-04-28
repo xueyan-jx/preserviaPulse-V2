@@ -14,12 +14,14 @@
 ########### Setting ##############
 # Install and load packages
 install.packages("rgbif")
+install.packages("tigris")
 library(here)
 library(sf)
 library(dplyr)
 library(rgbif)
 library(googledrive)
 library(googlesheets4)
+library(tigris) # to download county boundary
 
 # Set a directory for data
 here() # first check path
@@ -66,7 +68,7 @@ occ_meta <- occ_download(
                    c("FOSSIL_SPECIMEN", "LIVING_SPECIMEN"))),
   format = "SIMPLE_CSV"
   # if you've already put info in .Renviron, no need to use these arguments
-  #user = usr,      # Replace with your actual username
+  #user = "usr",      # Replace with your actual username
   #pwd = "pwd",       # Replace with your actual password
   #email = "email"  # Replace with your registered email
 )
@@ -87,8 +89,7 @@ if (status$status == "SUCCEEDED"){
 
 
 
-################ If want to get occurrence for a species list #######
-################       Same settings as above        ################
+################ Get occurrences for a list of species #######
 ################       1. Get species list   ########################
 
 # Authorization to Google Drive
@@ -154,3 +155,52 @@ if (status$status == "SUCCEEDED"){
   warning(sprintf("The request %s.", status$status))
   d <- NULL
 }
+
+
+########### Post-processing ##############
+####Check if the downloaded data includes all species in our list#####
+download_gbif <- read.csv("change this to your path for the downloaded occurrence.csv", stringsAsFactors = FALSE)
+
+unique_species <- unique(download_gbif$taxonKey)
+length(unique_species)
+
+missing_from_list <- setdiff(gbif_names$usageKey, unique_species)
+print(missing_from_list)
+# 3691920 5699909
+
+# Find the missing species
+missing_species_names <- gbif_names$canonicalName[gbif_names$usageKey %in% missing_from_list]
+print(missing_species_names)
+#"Erysimum suffrutescens grandifolium" "Malacothrix incana succulenta"
+
+####Clip data to target counties####
+# Wenxin comment: I think we need to discuss if we want to filter exactly by county boundary or add a buffer
+
+# Read the downloaded data
+download_gbif <- read.csv("change this to your path for the downloaded occurrence.csv", stringsAsFactors = FALSE)
+
+ca_counties <- counties(state = "CA", cb = TRUE)
+target_counties <- ca_counties %>%
+  filter(NAME %in% c("Santa Barbara", "Ventura", "San Luis Obispo"))
+
+# Convert .csv occurrence data to sf object (spatial data)
+occ_sf <- st_as_sf(download_gbif, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+
+# Keep same coordinate reference system
+occ_sf <- st_transform(occ_sf, st_crs(target_counties))
+
+# Clip to target counties
+occ_in_target <- st_intersection(occ_sf, target_counties)
+
+# Check data distribution
+plot(st_geometry(target_counties), col = "lightblue", border = "black", main = "GBIF Data Points within Target Counties")
+plot(st_geometry(occ_in_target), add = TRUE, col = "red", pch = 20)
+
+coordinates <- st_coordinates(occ_in_target)
+occ_in_target_df <- as.data.frame(occ_in_target)
+occ_in_target_df$decimalLongitude <- coordinates[, 1] 
+occ_in_target_df$decimalLatitude <- coordinates[, 2]  
+
+write.csv(occ_in_target_df, 
+          file.path(occ_dir, "Plant-Gbif-occ-targetCounty.csv"),
+          row.names = FALSE)
