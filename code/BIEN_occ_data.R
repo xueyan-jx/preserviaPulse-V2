@@ -1,9 +1,3 @@
-# Materials:
-# https://github.com/bmaitner/RBIEN/blob/master/tutorials/RBIEN_tutorial.Rmd
-
-########### Setting ##############
-
-
 install.packages("RBIEN")
 library(BIEN)
 
