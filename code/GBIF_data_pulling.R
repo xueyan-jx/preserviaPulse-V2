@@ -116,12 +116,7 @@ occ_meta <- occ_download(
   pred_not(pred_in("basisOfRecord",
                    c("FOSSIL_SPECIMEN","LIVING_SPECIMEN"))),
   pred("geometry", bbox_wkt),
-  format = "SIMPLE_CSV",
-  # if you've already put info in .Renviron, no need to use these arguments
-  #user = "user",      # Replace with your actual username
-  #pwd = "pwd",       # Replace with your actual password
-  #email = "email"  # Replace with your registered email
-)
+  format = "SIMPLE_CSV")
 
 # Save out the name catalog using the GBIF query unique ID in name to pair.
 write.csv(gbif_names, 
