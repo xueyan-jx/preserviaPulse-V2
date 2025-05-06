@@ -421,13 +421,9 @@ this_num_info[is.na(this_num_info)] <- 0
 this_num_info$`Handling person` <- myname
 
 # Update occ_num_info with this_num_info
-# Combine existing and new data
-occ_num_info <- bind_rows(occ_num_info, this_num_info) %>%
-  # Group by Species name and Handling person to handle duplicates
-  group_by(`Species name`, `Handling person`) %>%
-  # Keep the most recent entry (last one) for each species
-  slice_tail(n = 1) %>%
-  ungroup()
+# first remove any existing rows with myname
+occ_num_info <- occ_num_info %>% filter(`Handling person`!=myname)
+occ_num_info <- rbind(occ_num_info, this_num_info)
 
 # Fill any remaining NA values with 0
 occ_num_info[is.na(occ_num_info)] <- 0
