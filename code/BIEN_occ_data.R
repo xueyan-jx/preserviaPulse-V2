@@ -13,6 +13,7 @@ library(stringr) # for "fuzzy matching" and filtering our target species
 library(ggplot2)
 library(sf)
 library(dplyr)
+library(CoordinateCleaner)
 
 # Set a directory for data
 here() # first check path
@@ -98,14 +99,35 @@ BIEN_occ <- BIEN_occ %>%
   mutate(date_collected = as.Date(date_collected)) %>%           
   filter(date_collected >= as.Date("1980-01-01")) 
 
-# Get datasource and summarize the information
-unique(BIEN_occ$datasource)
+library(CoordinateCleaner)
+library(dplyr)
 
-BIEN_occ %>% group_by(datasource) %>%
+# CoordinateCleaner Wrapper
+BIEN_occ <- BIEN_occ %>% mutate(record_id = row_number())
+flag_cols_keep <- c('record_id', '.val', '.inst') #flag problems
+
+flags_bien <- clean_coordinates(x = BIEN_occ, 
+                                lon = "longitude", 
+                                lat = "latitude", 
+                                species = "scrubbed_species_binomial", 
+                                tests = c("institutions", "centroids", "zeros"))[flag_cols_keep]
+
+# remove rows with invalid coordinates
+ids_bien_invalid <- flags_bien[flags_bien$`.val` == FALSE, ]$record_id
+BIEN_occ_clean <- BIEN_occ %>% filter(!record_id %in% ids_bien_invalid)
+
+# remove rows recorded in biodiversity institutions
+ids_bien_inst <- flags_bien[flags_bien$`.inst` == FALSE, ]$record_id
+BIEN_occ_clean <- BIEN_occ_clean %>% filter(!record_id %in% ids_bien_inst)
+
+# Get datasource and summarize the information
+unique(BIEN_occ_clean$datasource)
+
+BIEN_occ_clean %>% group_by(datasource) %>%
   summarize(n=n())
 
 # Exclude records from GBIF
-BIEN_occ_subset<-BIEN_occ %>% filter(datasource!="GBIF")
+BIEN_occ_subset<-BIEN_occ_clean %>% filter(datasource!="GBIF")
 
 #-------------4. Merge records from GBIF and BIEN -------------
 # Read the saved GBIF data
