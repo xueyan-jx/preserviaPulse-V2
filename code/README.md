@@ -7,4 +7,4 @@ The script to query occurrence data from GBIF database.
 The script to generate slope, aspect, TRI, and flow accumulation layers from elevation (SRTM 30m) layer
 * Load and filter county boundaries
 * Mosaic and clip SRTM DEM
-* Compute slope, aspect, and TRI layers
+* Compute slope, aspect, TRI, and flow accumulation layers
