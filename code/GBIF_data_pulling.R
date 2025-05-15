@@ -460,12 +460,12 @@ occ_unique <- occ_with_grid %>%
 
 
 # save the cleaned dataframe
-write.table(occ_in_target_df,
+write.table(occ_unique,
             file.path(occ_dir, paste0('GBIF', download_id, '-final.csv')), row.names=FALSE,
             sep=';', quote=TRUE)
 
 # Run the below code in case write.table doesn't work
-write_csv(occ_in_target_df,
+write_csv(occ_unique,
           file.path(occ_dir, paste0('GBIF', download_id, "-final.csv")))
 
 # Upload to google drive
