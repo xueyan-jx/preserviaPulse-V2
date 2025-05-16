@@ -12,6 +12,8 @@ library(BIEN)
 library(stringr) # for "fuzzy matching" and filtering our target species 
 library(ggplot2)
 library(sf)
+library(terra)
+library(tigris) # to download county boundary
 library(dplyr)
 library(CoordinateCleaner)
 
@@ -22,7 +24,6 @@ here() # first check path
 occ_dir <- here("data/occurrences") # create a data folder with relative path
 file.path(occ_dir) # double check its absolute path
 if (!dir.exists(occ_dir)) dir.create(occ_dir) # if it's not there already, create it
-
 
 # Authoritization to Google Drive
 drive_auth()
@@ -88,20 +89,18 @@ if(nrow(speciesObs_folder) > 0) {
   warning("Could not find 'specieObs' folder in Google Drive. File saved locally only.")
 }
 
-#-------------3. Exclude records from GBIF -------------
+#-------------3. Data clean  -------------
 BIEN_occ <- filtered_occ
 
 # Or read the saved BIEN data directly
 # BIEN_occ<-read.csv("replace to your path/BIEN_3counties_occurrences.csv")
 
-# Delete records before 1980
+# ------------- (1) Delete records before 1980----------
 BIEN_occ <- BIEN_occ %>%
   mutate(date_collected = as.Date(date_collected)) %>%           
   filter(date_collected >= as.Date("1980-01-01")) 
 
-library(CoordinateCleaner)
-library(dplyr)
-
+# ------------- (2) Other filter ----------
 # CoordinateCleaner Wrapper
 BIEN_occ <- BIEN_occ %>% mutate(record_id = row_number())
 flag_cols_keep <- c('record_id', '.val', '.inst') #flag problems
@@ -126,117 +125,75 @@ unique(BIEN_occ_clean$datasource)
 BIEN_occ_clean %>% group_by(datasource) %>%
   summarize(n=n())
 
-# Exclude records from GBIF
-BIEN_occ_subset<-BIEN_occ_clean %>% filter(datasource!="GBIF")
-
-#-------------4. Merge records from GBIF and BIEN -------------
-# Read the saved GBIF data
-GBIF_occ_clean <- read.csv("Replace to your path/GBIF-Plant0017179-250426092105405-cleaned.csv",
-                           quote = "\"",
-                           stringsAsFactors = FALSE,
-                           fileEncoding = "UTF-8")
-
-# Check column names from the two datasets 
-# and rename them so that they match each other
-colnames(GBIF_occ_clean)
-colnames(BIEN_occ_subset)
-colnames(BIEN_occ_subset)[1:4]=c("species","decimalLatitude","decimalLongitude","eventDate")
-
-# Merge the two datasets
-BIEN_occ_subset$eventDate <- as.character(BIEN_occ_subset$eventDate) #Make sure data types in eventDate are consistent
-df <- bind_rows(BIEN_occ_subset, GBIF_occ_clean)
-
-# View duplicates
-df %>%
-  group_by(species, decimalLatitude, decimalLongitude) %>%
-  filter(n() > 1)
-
-# Remove duplicates
-df_unique <- df %>%
-  distinct(species, decimalLatitude, decimalLongitude, .keep_all = TRUE)
-
-# Check the records number for species
-df_unique_stat <- df_unique %>%
-  group_by(species) %>%
-  summarize(n=n())
-
-# Plot the results
-ggplot(df_unique_stat, aes(x = reorder(species, -n), y = n)) +
-  geom_bar(stat = "identity") +
-  labs(
-    title = "Species Occurrence Counts",
-    x = "Species",
-    y = "Number of Records"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-    text = element_text(size = 14)
-  )
-
-#-------------5. Keep only one records for a species in a given buffer -------------
-# Convert the merged dataset to sf format (spatial data)
-df_sf <- df_unique %>%
-  st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
-
-# Projecting the data
-df_sf <- st_transform(df_sf, crs = 32611)
-
-# Calculate 30 m buffer for each record (can change to other resolution)
-buffered <- st_buffer(df_sf, dist = 30)
-
-# Merge overlapping buffered points 
-# Records with the same group ID are within 30 meters of each other
-# Retain only one records for per group
-df_sf$group <- as.integer(st_within(df_sf, buffered, sparse = FALSE) %>% 
-                            apply(1, function(x) which(x)[1]))
-
-# Convert back to Geographic Coordinate System (GCS)
-df_sf_latlon <- st_transform(df_sf, crs = 4326)
-
-df_unique_buffer <- df_sf_latlon %>%
-  group_by(species, group) %>%
-  slice(1) %>%
-  ungroup() %>%
-  mutate(
-    longitude = st_coordinates(geometry)[, 1],
-    latitude = st_coordinates(geometry)[, 2]
-  ) %>%
-  st_drop_geometry()
-
-# Save out the downloaded data
-write.csv(df_unique_buffer, 
-          file.path(occ_dir, "Plant-Merge_Gbif_BIEN_3counties_occurrences.csv"),
-          row.names = FALSE)
-
-# Check final records number for species
-df_unique_stat <- df_unique_buffer %>%
-  group_by(species) %>%
-  summarize(n=n())
-write.csv(df_unique_stat, 
-          file.path(occ_dir, "Plant_occurrences_stat.csv"),
-          row.names = FALSE)
-
-# Check final records number for the first 20 species (Preserve most care)
-top20_names <- scientific_names[1:20]
-df_top20 <- df_unique_stat %>%
-  filter(species %in% top20_names)
-## Missing species
-not_found <- setdiff(top20_names, df_unique_stat$species)
+#-------------4. Exclude records from GBIF -------------
+BIEN_occ_subset <- BIEN_occ_clean %>% filter(datasource!="GBIF")
 
 
-# Upload data to google drive
+# ----------- 5. Keep only one record for each grid -----------
+#---------(1) Create fishnet using climate data (CHELSA_bio1) ------
+raster_template <- terra::rast("Change this to your path/CHELSA_bio1_1981-2010_V.2.1.tif")
+
+# County boundary
+target_counties <- ca_counties %>%
+  filter(NAME %in% c("Santa Barbara", "Ventura", "San Luis Obispo")) # limit to counties of interest
+
+# Keep sameCoordinate Reference Systems
+counties <- st_transform(target_counties, sf::st_crs(raster_template))
+
+# Get resolution and extent of the raster data
+res_xy <- res(raster_template)
+raster_bbox <- st_as_sfc(st_bbox(raster_template))
+
+# Create full fishnet within the target extent
+full_fishnet <- st_make_grid(raster_bbox, cellsize = res_xy, what = "polygons", square = TRUE)
+full_fishnet_sf <- st_sf(full_fishnet)
+
+# Crop and mask raster to the extent of the counties
+fishnet_clipped <- st_intersection(full_fishnet_sf, counties)
+
+# Add a unique ID column to the clipped fishnet polygons if it doesn't exist
+if (!"grid_id" %in% colnames(fishnet_clipped)) {
+  fishnet_clipped$grid_id <- 1:nrow(fishnet_clipped)
+}
+
+# ---------(2) Convert cleaned BIEN data to spatial data ------
+# Convert to spatial data
+BIEN_occ_subset_sf <- st_as_sf(BIEN_occ_subset, coords = c("longitude", "latitude"), crs = 4326)
+
+# Reproject to match the fishnet CRS
+BIEN_occ_subset_sf <- st_transform(BIEN_occ_subset_sf, st_crs(fishnet_clipped))
+
+#### ---------c. Reduce records ------
+# Spatial join: assign each point to a fishnet polygon
+BIEN_occ_with_grid <- st_join(BIEN_occ_subset_sf, fishnet_clipped)
+
+# Remove points that do not fall into any fishnet cell (i.e., those with NA grid_id)
+BIEN_occ_with_grid <- BIEN_occ_with_grid %>% filter(!is.na(grid_id))
+
+# Rename the column for species
+BIEN_occ_with_grid <- BIEN_occ_with_grid %>%
+  rename(species = scrubbed_species_binomial)
+
+# For each species and grid cell, keep only one record
+BIEN_occ_unique <- BIEN_occ_with_grid %>%
+  group_by(species, grid_id) %>%
+  slice(1) %>%  # Keep the first record in each group
+  ungroup()
+
+# save the cleaned dataframe
+write_csv(BIEN_occ_unique,
+          file.path(occ_dir, paste0('BIEN', download_id, "-final.csv")))
+
+# Upload to google drive
 # Get the target folder first to ensure it exists
 speciesObs_folder <- drive_find(pattern = "speciesObs", type = "folder")
 if(nrow(speciesObs_folder) > 0) {
   # Upload to Google Drive if folder found
   drive_upload(
-    file.path(occ_dir, "Plant_occurrences_stat.csv"),
+    file.path(occ_dir, paste0('BIEN', download_id, '-final.csv')),
     path = as_id(speciesObs_folder$id[1]),
-    name = "Plant_occurrences_stat.csv"
+    name = paste0('BIEN', download_id, '-final.csv')
   )
 } else {
-  warning("Could not find 'specieObs' folder in Google Drive. File saved locally only.")
+  warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
 }
-
-
