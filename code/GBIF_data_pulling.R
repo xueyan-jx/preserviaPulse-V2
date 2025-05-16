@@ -18,6 +18,7 @@ install.packages("CoordinateCleaner")
 install.packages("rnaturalearthdata")
 library(here)
 library(sf)
+library(terra) # read raster
 library(dplyr)
 library(rgbif)
 library(googledrive)
@@ -392,7 +393,7 @@ write.table(occ_in_target_df,
 
 # Run the below code in case write.table doesn't work
 write_csv(occ_in_target_df,
-          file.path(occ_dir, paste0(download_id, "-cleaned.csv")))
+          file.path(occ_dir, paste0('GBIF', download_id, "-cleaned.csv")))
 
 # Upload to google drive
 # Get the target folder first to ensure it exists
@@ -403,6 +404,79 @@ if(nrow(speciesObs_folder) > 0) {
     file.path(occ_dir, paste0('GBIF', download_id, '-cleaned.csv')),
     path = as_id(speciesObs_folder$id[1]),
     name = paste0('GBIF', download_id, '-cleaned.csv')
+  )
+} else {
+  warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
+}
+
+### ----------- (5) Keep only one record for each grid -----------
+#### ---------a. Create fishnet using climate data (CHELSA_bio1) ------
+raster_template <- terra::rast("Change this to your path/CHELSA_bio1_1981-2010_V.2.1.tif")
+
+# County boundary
+target_counties <- target_counties
+
+# Keep sameCoordinate Reference Systems
+counties <- st_transform(target_counties, sf::st_crs(raster_template))
+
+# Get resolution and extent of the raster data
+res_xy <- res(raster_template)
+raster_bbox <- st_as_sfc(st_bbox(raster_template))
+
+# Create full fishnet within the target extent
+full_fishnet <- st_make_grid(raster_bbox, cellsize = res_xy, what = "polygons", square = TRUE)
+full_fishnet_sf <- st_sf(full_fishnet)
+
+# Crop and mask raster to the extent of the counties
+fishnet_clipped <- st_intersection(full_fishnet_sf, counties)
+
+# Add a unique ID column to the clipped fishnet polygons if it doesn't exist
+if (!"grid_id" %in% colnames(fishnet_clipped)) {
+  fishnet_clipped$grid_id <- 1:nrow(fishnet_clipped)
+}
+
+#### ---------b. Convert cleaned GBIF data to spatial data ------
+# Get cleaned GBIF data
+occ_clean <- occ_in_target_df
+
+# Convert to spatial data
+occ_clean_sf <- st_as_sf(occ_clean, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+
+# Reproject to match the fishnet CRS
+occ_clean_sf <- st_transform(occ_clean_sf, st_crs(fishnet_clipped))
+
+#### ---------c. Reduce records ------
+# Spatial join: assign each point to a fishnet polygon
+occ_with_grid <- st_join(occ_clean_sf, fishnet_clipped)
+
+# Remove points that do not fall into any fishnet cell (i.e., those with NA grid_id)
+occ_with_grid <- occ_with_grid %>% filter(!is.na(grid_id))
+
+# For each species and grid cell, keep only one record
+occ_unique <- occ_with_grid %>%
+  group_by(species, grid_id) %>%
+  slice(1) %>%  # Keep the first record in each group
+  ungroup()
+
+
+# save the cleaned dataframe
+write.table(occ_unique,
+            file.path(occ_dir, paste0('GBIF', download_id, '-final.csv')), row.names=FALSE,
+            sep=';', quote=TRUE)
+
+# Run the below code in case write.table doesn't work
+write_csv(occ_unique,
+          file.path(occ_dir, paste0('GBIF', download_id, "-final.csv")))
+
+# Upload to google drive
+# Get the target folder first to ensure it exists
+speciesObs_folder <- drive_find(pattern = "speciesObs", type = "folder")
+if(nrow(speciesObs_folder) > 0) {
+  # Upload to Google Drive if folder found
+  drive_upload(
+    file.path(occ_dir, paste0('GBIF', download_id, '-final.csv')),
+    path = as_id(speciesObs_folder$id[1]),
+    name = paste0('GBIF', download_id, '-final.csv')
   )
 } else {
   warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
