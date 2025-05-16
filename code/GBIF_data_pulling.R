@@ -52,6 +52,19 @@ target_counties <- ca_counties %>%
 bbox_tgt <- st_bbox(target_counties) # also get the bounding box to add a spatial filter when querying
 bbox_wkt <- st_as_text(st_as_sfc(bbox_tgt)) # re-format to use it in rgbif
 
+# ------------------- get a list of all species --------------------
+ss <- drive_get("Special Status Species")
+all_names <- as.data.frame(matrix(ncol=2, nrow=0))
+colnames(all_names) <- c('Name (Latin)', 'Name (common)')
+for(taxon in c('Plants', 'Birds', 'Mammals', 'Herps', 'Inverterbrates')){
+  dat <- read_sheet(ss, sheet=taxon) %>% select(`Name (Latin)`, `Name (common)`)
+  all_names <- rbind(all_names, dat)
+}
+
+all_names <- all_names %>% mutate(
+  `Name (Latin)` = ifelse(`Name (Latin)`=='Vulpes vulpes ssp.', 'Vulpes vulpes', `Name (Latin)`)
+) %>% unique()
+
 # ------------- Get occurrence info for a species list --------------
 ## ------------ 1. Get species list ------------
 
@@ -217,7 +230,8 @@ if(nrow(speciesObs_folder) > 0) {
   drive_upload(
     file.path(occ_dir, paste0(download_id, "_3counties_pts.csv")),
     path = as_id(speciesObs_folder$id[1]),
-    name = paste0('GBIF_', download_id, "_3counties_pts.csv")
+    name = paste0('GBIF_', download_id, "_3counties_pts.csv"),
+    overwrite = TRUE
   )
 } else {
   warning("Could not find 'specieObs' folder in Google Drive. File saved locally only.")
@@ -403,7 +417,8 @@ if(nrow(speciesObs_folder) > 0) {
   drive_upload(
     file.path(occ_dir, paste0('GBIF', download_id, '-cleaned.csv')),
     path = as_id(speciesObs_folder$id[1]),
-    name = paste0('GBIF', download_id, '-cleaned.csv')
+    name = paste0('GBIF', download_id, '-cleaned.csv'),
+    overwrite = TRUE
   )
 } else {
   warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
@@ -411,7 +426,12 @@ if(nrow(speciesObs_folder) > 0) {
 
 ### ----------- (5) Keep only one record for each grid -----------
 #### ---------a. Create fishnet using climate data (CHELSA_bio1) ------
-raster_template <- terra::rast("Change this to your path/CHELSA_bio1_1981-2010_V.2.1.tif")
+if(!file.exists(here('data/CHELSA_bio1_1981-2010_V.2.1.tif'))){
+  tmplt <- drive_get("CHELSA_bio1_1981-2010_V.2.1.tif")
+  drive_download(tmplt, path=here('data/CHELSA_bio1_1981-2010_V.2.1.tif'))
+}
+
+raster_template <- terra::rast(here("data/CHELSA_bio1_1981-2010_V.2.1.tif"))
 
 # County boundary
 target_counties <- target_counties
@@ -435,52 +455,85 @@ if (!"grid_id" %in% colnames(fishnet_clipped)) {
   fishnet_clipped$grid_id <- 1:nrow(fishnet_clipped)
 }
 
-#### ---------b. Convert cleaned GBIF data to spatial data ------
-# Get cleaned GBIF data
-occ_clean <- occ_in_target_df
-
-# Convert to spatial data
-occ_clean_sf <- st_as_sf(occ_clean, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
-
-# Reproject to match the fishnet CRS
-occ_clean_sf <- st_transform(occ_clean_sf, st_crs(fishnet_clipped))
-
-#### ---------c. Reduce records ------
-# Spatial join: assign each point to a fishnet polygon
-occ_with_grid <- st_join(occ_clean_sf, fishnet_clipped)
-
-# Remove points that do not fall into any fishnet cell (i.e., those with NA grid_id)
-occ_with_grid <- occ_with_grid %>% filter(!is.na(grid_id))
-
-# For each species and grid cell, keep only one record
-occ_unique <- occ_with_grid %>%
-  group_by(species, grid_id) %>%
-  slice(1) %>%  # Keep the first record in each group
-  ungroup()
-
-
-# save the cleaned dataframe
-write.table(occ_unique,
-            file.path(occ_dir, paste0('GBIF', download_id, '-final.csv')), row.names=FALSE,
-            sep=';', quote=TRUE)
-
-# Run the below code in case write.table doesn't work
-write_csv(occ_unique,
-          file.path(occ_dir, paste0('GBIF', download_id, "-final.csv")))
-
-# Upload to google drive
-# Get the target folder first to ensure it exists
-speciesObs_folder <- drive_find(pattern = "speciesObs", type = "folder")
-if(nrow(speciesObs_folder) > 0) {
-  # Upload to Google Drive if folder found
-  drive_upload(
-    file.path(occ_dir, paste0('GBIF', download_id, '-final.csv')),
-    path = as_id(speciesObs_folder$id[1]),
-    name = paste0('GBIF', download_id, '-final.csv')
-  )
-} else {
-  warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
+# occ_clean <- occ_in_target_df
+final_clean_sort_of_thinning <- function(occ_clean, taxon, thisdir){
+  #### ---------b. Convert cleaned data to spatial data ------
+  # occ_clean is cleaned data
+  # Convert to spatial data
+  occ_clean_sf <- st_as_sf(occ_clean, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+  
+  # Reproject to match the fishnet CRS
+  occ_clean_sf <- st_transform(occ_clean_sf, st_crs(fishnet_clipped))
+  
+  #### ---------c. Reduce records ------
+  # Spatial join: assign each point to a fishnet polygon
+  occ_with_grid <- st_join(occ_clean_sf, fishnet_clipped)
+  
+  # Remove points that do not fall into any fishnet cell (i.e., those with NA grid_id)
+  occ_with_grid <- occ_with_grid %>% filter(!is.na(grid_id))
+  
+  # For each species and grid cell, keep only one record
+  occ_unique <- occ_with_grid %>%
+    group_by(species, grid_id) %>%
+    slice(1) %>%  # Keep the first record in each group
+    ungroup()
+  
+  
+  # save the cleaned dataframe
+  write.table(occ_unique,
+              file.path(thisdir, paste0(taxon, '-cleaned-0515.csv')), row.names=FALSE,
+              sep=';', quote=TRUE)
+  print('saved to local')
+  # use write_csv in case it does not work
+  
+  # Upload to google drive
+  speciesObs_folder <- drive_find(pattern = "speciesObs", type = "folder")
+  if(nrow(speciesObs_folder) > 0) {
+    # Upload to Google Drive if folder found
+    drive_upload(
+      file.path(thisdir, paste0(taxon, '-cleaned-0515.csv')),
+      path = as_id(speciesObs_folder$id[1]),
+      name = paste0(taxon, '-cleaned-0515.csv'),
+      overwrite = TRUE
+    )
+  } else {
+    warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
+  }
+  
+  
+  return(occ_unique)
 }
+
+
+# for animal species
+anim_dir <- here('data/occurrences/animals/')
+cleaned_animal_files <- list.files(path=anim_dir, pattern = 'merged*')
+li_info <- list()
+for(thefile in cleaned_animal_files){
+  this_df <- read.csv(file.path(anim_dir, thefile))
+  taxon = strsplit(thefile, '_')[[1]][2]
+  print(taxon)
+  this_unique_occ <- final_clean_sort_of_thinning(this_df, taxon, anim_dir)
+  this_info <- as.data.frame(table(this_unique_occ$species))
+  li_info <- append(li_info, list(this_info))
+}
+
+
+birds_final_info <- li_info[1]
+birds_final_info <- merge(birds_final_info, all_names, by.x='Var1', by.y='Name (Latin)')[c('Var1', 'Name (common)', 'Freq')]
+colnames(birds_final_info) <- c('Name (Latin)', 'Name (common)', 'Number')
+write_csv(birds_final_info, file.path(anim_dir, 'birds_final_num.csv'))
+
+mammals_final_info <- li_info[3]
+mammals_final_info <- merge(mammals_final_info, all_names, by.x='Var1', by.y='Name (Latin)')[c('Var1', 'Name (common)', 'Freq')]
+colnames(mammals_final_info) <- c('Name (Latin)', 'Name (common)', 'Number')
+write_csv(mammals_final_info, file.path(anim_dir, 'mammals_final_num.csv'))
+
+herps_invs_final_info <- li_info[2]
+herps_invs_final_info <- merge(herps_invs_final_info, all_names, by.x='Var1', by.y='Name (Latin)')[c('Var1', 'Name (common)', 'Freq')]
+colnames(herps_invs_final_info) <- c('Name (Latin)', 'Name (common)', 'Number')
+write_csv(herps_invs_final_info, file.path(anim_dir, 'herps_invs_final_num.csv'))
+
 
 ## ----------- 4. Record numbers of records after each step -----------
 # remember to also update numbers in the Google spreadsheet
