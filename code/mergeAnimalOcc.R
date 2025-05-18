@@ -44,6 +44,10 @@ for(taxon in c('Plants', 'Birds', 'Mammals', 'Herps', 'Inverterbrates')){
   all_names <- rbind(all_names, dat)
 }
 
+all_names <- all_names %>% mutate(
+  `Name (Latin)` = ifelse(`Name (Latin)`=='Vulpes vulpes ssp.', 'Vulpes vulpes', `Name (Latin)`)
+) %>% unique()
+
 # -------------------- download GBIF data from Google Drive ----------------
 all_cleaned_files <- drive_find(pattern = "-cleaned.csv", type = "csv")
 all_cleaned_files$name

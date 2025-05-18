@@ -1,7 +1,6 @@
 ## Purpose of script: map occurrence points for a species
 ## Authors: GEOG 274
 ## Date: Spring, 2025
-## Credits to: Wenxin Yang, Jacqueline Vogel, Yanni Zhan, Xue Yan, Dr. Lei Song (lsong@ucsb.edu)
 
 # ------------- Setting up --------------
 # Install and load packages
@@ -12,6 +11,7 @@ library(here)
 library(sf)
 library(leaflet)
 library(htmlwidgets)
+library(stringr)
 
 # Set a directory for data
 here() # first check path
@@ -26,28 +26,56 @@ target_counties <- ca_counties %>%
   filter(NAME %in% c("Santa Barbara", "Ventura", "San Luis Obispo")) # limit to counties of interest
 
 
+# ------------------- get a list of all species --------------------
+ss <- drive_get("Special Status Species")
+all_names <- as.data.frame(matrix(ncol=3, nrow=0))
+colnames(all_names) <- c('Name (Latin)', 'Name (common)', 'Where Listed?')
+for(taxon in c('Birds')){
+  dat <- read_sheet(ss, sheet=taxon) %>% select(`Name (Latin)`, `Name (common)`,
+                                                'Where Listed?')
+  all_names <- rbind(all_names, dat)
+}
+
+all_names <- all_names %>% mutate(
+  `Name (Latin)` = ifelse(`Name (Latin)`=='Vulpes vulpes ssp.', 'Vulpes vulpes', `Name (Latin)`)
+) %>% unique()
+
+irmp_sp <- all_names %>% filter(`Where Listed?`=='IRMP')
+
+# ------------- Get bird final info --------------
+birds_final_info <- read.csv('data/occurrences/animals/birds_final_num.csv')
+colnames(birds_final_info) <- c('Name (Latin)', 'Name (common)', 'Number')
+
+irmp_info <- merge(irmp_sp, birds_final_info)
+setdiff(irmp_sp$`Name (Latin)`, irmp_info$`Name (Latin)`)
+
+
 # ------------- Basic map of distribution for a list of species --------------
 # search for a csv that ends with -cleaned.csv and read it
-file <- list.files(path = "data/occurrences", pattern = "-cleaned.csv$", full.names = TRUE)
-df <- read.delim(file, sep = ';')
+#files <- list.files(path = "data/occurrences/animals", pattern = "-cleaned-0515.csv$", full.names = TRUE)
+df <- read.delim('data/occurrences/animals/birds-cleaned-0515.csv', sep = ';')
 unique(df$species)
 
-# see number of records for each specie and sort by Freq
-count_info <- as.data.frame(table(df$species)) %>% arrange(desc(Freq))
-# define a list of species names, in my case I'm selecting the 5 with most counts
-# for some folks, it could be selecting species mentioned by the IRMP
-# li_interests <- c('Piranga ludoviciana', 'Larus occidentalis', 'Ardea alba')
-li_interests <- count_info$Var1[1:5]
-# filter records for specie of interest
-df1 <- df %>% filter(species %in% li_interests) %>% select(species, decimalLongitude, decimalLatitude)
-# convert to sf object, specify the coordinate reference system and the geometry column
-geodf1 <- st_as_sf(df1, crs = 4326, coords = c("decimalLongitude", "decimalLatitude"))
+# irmp species
+df_irmp <- df %>% filter(species %in% unique(irmp_info$`Name (Latin)`))
+df_irmp <- merge(df_irmp, all_names, by.x='species', by.y='Name (Latin)')
+
+# Extract coordinates from geometry string
+df_irmp <- df_irmp %>%
+  mutate(
+    x = as.numeric(str_extract(geometry, "(?<=c\\()[0-9.]+")),
+    y = as.numeric(str_extract(geometry, "(?<=, )[0-9.]+"))
+  )
+
+# Convert to spatial data
+gdf_irmp <- st_as_sf(df_irmp, coords = c("x", "y"), crs = 2229 # same crs to fishnet_clipped
+)
 
 # create static maps for target species
 p <- ggplot() +
   geom_sf(data = target_counties, fill = "lightblue", color = "black", linewidth = 1) +
-  geom_sf(data = geodf1, col = "red", pch = 20) +
-  facet_wrap(~species) +
+  geom_sf(data = gdf_irmp, col = "red", pch = 20) +
+  facet_wrap(~`Name (common)`) +
   theme_minimal() +
   theme(legend.position = "none")
 
