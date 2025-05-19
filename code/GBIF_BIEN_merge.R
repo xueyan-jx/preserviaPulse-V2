@@ -1,4 +1,4 @@
-## Purpose of script: Merge records from GBIF and BIEN
+## Purpose of script: Merge records from GBIF, BIEN, and DP_portal
 ## Authors: GEOG 274
 ## Date: Spring, 2025
 ## Credits to: Yanni Zhan, Xue Yan
