@@ -182,7 +182,7 @@ BIEN_occ_unique <- BIEN_occ_with_grid %>%
 
 # save the cleaned dataframe
 write_csv(BIEN_occ_unique,
-          file.path(occ_dir, paste0('BIEN-final.csv')))
+          file.path(occ_dir, 'BIEN-final.csv'))
 
 # Upload to google drive
 # Get the target folder first to ensure it exists
@@ -190,9 +190,9 @@ speciesObs_folder <- drive_find(pattern = "speciesObs", type = "folder")
 if(nrow(speciesObs_folder) > 0) {
   # Upload to Google Drive if folder found
   drive_upload(
-    file.path(occ_dir, paste0('BIEN-final.csv')),
+    file.path(occ_dir, 'BIEN-final.csv'),
     path = as_id(speciesObs_folder$id[1]),
-    name = paste0('BIEN-final.csv')
+    name = 'BIEN-final.csv'
   )
 } else {
   warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
