@@ -160,7 +160,7 @@ if(file.exists(file.path(occ_dir, paste0(download_id, '.zip')))){
 # ------------- Post-processing --------------
 # read in the google spreadsheet to record each step
 pt_info <- drive_get("GBIF Occurrence Removal")
-missing_species <- read_sheet(pt_info, sheet = "Missing species")
+missing_species <- read_sheet(pt_info, sheet = "GBIF missing species")
 occ_num_info <- read_sheet(pt_info, sheet = "Occurrence number changes")
 
 ## ----------- 1. Get species with no records -----------
@@ -183,7 +183,7 @@ this_info <- gbif_names[gbif_names$usageKey %in% missing_from_list,]
 this_info$`Handling person` = myname
 print(unique(this_info$canonicalName))
 
-missing_species <- rbind(missing_species, this_info)
+missing_species <- rbind(missing_species, this_info) %>% unique()
 
 # Update the Google spreadsheet
 write_sheet(missing_species, pt_info, sheet = "GBIF missing species")
@@ -481,7 +481,7 @@ final_clean_sort_of_thinning <- function(occ_clean, taxon, thisdir){
   
   # save the cleaned dataframe
   write.table(occ_unique,
-              file.path(thisdir, paste0(taxon, '-cleaned-0515.csv')), row.names=FALSE,
+              file.path(thisdir, paste0(taxon, '-cleaned-0519.csv')), row.names=FALSE,
               sep=';', quote=TRUE)
   print('saved to local')
   # use write_csv in case it does not work
@@ -491,21 +491,53 @@ final_clean_sort_of_thinning <- function(occ_clean, taxon, thisdir){
   if(nrow(speciesObs_folder) > 0) {
     # Upload to Google Drive if folder found
     drive_upload(
-      file.path(thisdir, paste0(taxon, '-cleaned-0515.csv')),
+      file.path(thisdir, paste0(taxon, '-cleaned-0519.csv')),
       path = as_id(speciesObs_folder$id[1]),
-      name = paste0(taxon, '-cleaned-0515.csv'),
+      name = paste0(taxon, '-cleaned-0519.csv'),
       overwrite = TRUE
     )
   } else {
     warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
-  }
+    }
   
   
   return(occ_unique)
 }
 
+## ----------- 4. Record numbers of records after each step -----------
+# remember to also update numbers in the Google spreadsheet
+this_num_info <- Reduce(function(x, y) merge(x, y, all = TRUE),
+                     list(num_downloaded, num_3counties, num_coordUnc, 
+                          num_issue, num_time, num_dup, 
+                          num_inv, num_biodivinst, num_suscount))
 
-# for animal species
+# Fill NA values with 0
+this_num_info[is.na(this_num_info)] <- 0
+# Add handling person
+this_num_info$`Handling person` <- myname
+
+# Update occ_num_info with this_num_info
+# first remove any existing rows with myname
+occ_num_info <- occ_num_info %>% filter(`Handling person`!=myname)
+occ_num_info <- rbind(occ_num_info, this_num_info)
+
+# Fill any remaining NA values with 0
+occ_num_info[is.na(occ_num_info)] <- 0
+
+# move handling_person to the last column
+occ_num_info <- occ_num_info %>%
+  dplyr::select(colnames(occ_num_info)[colnames(occ_num_info) != "Handling person"], "Handling person")
+
+# sort handling person column by alphabetical order
+occ_num_info <- occ_num_info %>%
+  arrange(`Handling person`)
+
+# update the Google spreadsheet
+write_sheet(occ_num_info, pt_info, sheet = "Occurrence number changes")
+
+
+# --------------------- 5. Merge animal species -----------------
+# for merging animal species
 anim_dir <- here('data/occurrences/animals/')
 cleaned_animal_files <- list.files(path=anim_dir, pattern = 'merged*')
 li_info <- list()
@@ -534,34 +566,3 @@ herps_invs_final_info <- merge(herps_invs_final_info, all_names, by.x='Var1', by
 colnames(herps_invs_final_info) <- c('Name (Latin)', 'Name (common)', 'Number')
 write_csv(herps_invs_final_info, file.path(anim_dir, 'herps_invs_final_num.csv'))
 
-
-## ----------- 4. Record numbers of records after each step -----------
-# remember to also update numbers in the Google spreadsheet
-this_num_info <- Reduce(function(x, y) merge(x, y, all = TRUE),
-                     list(num_downloaded, num_3counties, num_coordUnc, 
-                          num_issue, num_time, num_dup, 
-                          num_inv, num_biodivinst, num_suscount))
-
-# Fill NA values with 0
-this_num_info[is.na(this_num_info)] <- 0
-# Add handling person
-this_num_info$`Handling person` <- myname
-
-# Update occ_num_info with this_num_info
-# first remove any existing rows with myname
-occ_num_info <- occ_num_info %>% filter(`Handling person`!=myname)
-occ_num_info <- rbind(occ_num_info, this_num_info)
-
-# Fill any remaining NA values with 0
-occ_num_info[is.na(occ_num_info)] <- 0
-
-# move handling_person to the last column
-occ_num_info <- occ_num_info %>%
-  select(colnames(occ_num_info)[colnames(occ_num_info) != "Handling person"], "Handling person")
-
-# sort handling person column by alphabetical order
-occ_num_info <- occ_num_info %>%
-  arrange(`Handling person`)
-
-# update the Google spreadsheet
-write_sheet(occ_num_info, pt_info, sheet = "Occurrence number changes")

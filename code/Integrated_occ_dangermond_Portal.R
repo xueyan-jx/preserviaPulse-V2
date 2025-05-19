@@ -37,29 +37,25 @@ target_counties <- ca_counties %>%
 
 # ------------- Get occurrence info for a species list --------------
 ## ------------ 1. Get species list ------------
-
-# Get data from the spreadsheet
 ss <- drive_get("Special Status Species")
+all_names <- as.data.frame(matrix(ncol=2, nrow=0))
+colnames(all_names) <- c('Name (Latin)', 'Name (common)')
+for(taxon in c('Plants', 'Birds', 'Mammals', 'Herps', 'Inverterbrates')){
+  dat <- read_sheet(ss, sheet=taxon) %>% dplyr::select(`Name (Latin)`, `Name (common)`)
+  all_names <- rbind(all_names, dat)
+}
 
-## E.g. sheet names
-ss_meta <- gs4_get(ss) 
-sheet_names <- ss_meta$sheets$name
+all_names <- all_names %>% mutate(
+  `Name (Latin)` = ifelse(`Name (Latin)`=='Vulpes vulpes ssp.', 'Vulpes vulpes', `Name (Latin)`)
+) %>% unique()
 
-dat <- read_sheet(ss, sheet = sheet_names[1]) # Select the taxa you're working on
-head(dat)
-
-# for birds, we assigned individuals to different species so we subset the data frame
-# skip the following line if you're not working on birds...
-# dat <- dat %>% filter(Name==myname) # replace with your name
-
-# Get species' names
-scientific_names_df <- dat[, c("Name (common)", "Name (Latin)")]
-
-# Use Latin name for searching
-scientific_names <- scientific_names_df$`Name (Latin)`
+scientific_names <- unique(all_names$`Name (Latin)`)
 
 ## ------------ 2. Get information from dangermond portal ------------
-DP_portal_occ <- read.csv("E:/OneDrive/UCSB/Class/GEOG274/preserviaPulse/data/occurrences/integrated_occurrences_dangermond_Portal.csv",
+# download from google drive
+dp_gdrive <- drive_find(pattern = "integrated_occurrences_dangermond.csv", type = "csv")
+drive_download(dp_gdrive[1,]$id, path = here('data/occurrences/integrated_occurrences_dangermond.csv'))
+DP_portal_occ <- read.csv("data/occurrences/integrated_occurrences_dangermond.csv",
                            quote = "\"",
                            stringsAsFactors = FALSE,
                            fileEncoding = "UTF-8")
@@ -74,15 +70,16 @@ DP_portal_occ <- DP_portal_occ %>%
   filter(!is.na(species))
 
 #---------------3. Exclude records from GBIF and iNaturalist and non-plant record-------------
+# change the syntax to include or exclude plants
+#Plantae for plants, Animalia for animals
+unique(DP_portal_occ$kingdom)
 DP_portal_occ <- DP_portal_occ %>% 
-  filter(source!="GBIF" & source!="iNaturalist" & kingdom =="Plantae")
+  filter(source!="GBIF" & source!="iNaturalist" & kingdom =="Animalia")
+
 
 # ------------- 4. Exclude records before 1980----------
-DP_portal_occ <- DP_portal_occ %>%
-  mutate(eventDate = as.Date(eventDate)) %>%           
-  filter(eventDate >= as.Date("1980-01-01") & eventDate <= as.Date("2025-05-17")) # There are errors in date (2069), so add this filter 
-
-unique(DP_portal_occ$eventDate)
+DP_portal_occ <- DP_portal_occ %>% filter(year >=1980)
+unique(DP_portal_occ$year)
 
 # ------------ 5. Exclude species with no records -----------
 # Function to remove taxonomic rank indicators such as ssp., var., subsp., etc.
@@ -175,7 +172,9 @@ DP_occ_clean %>% group_by(source) %>%
 DP_occ_clean <- DP_occ_clean %>%
   filter(coordinateUncertaintyInMeters <=1000 | is.na(coordinateUncertaintyInMeters))
 
-# ----------- 4. Keep only one record for each grid -----------
+write.table(DP_occ_clean, here('data/occurrences/animals/DP_clean_animals_0519.csv'), sep= ';')
+
+# ----------- 8. Keep only one record for each grid -----------
 #---------(1) Create fishnet using climate data (CHELSA_bio1) ------
 if(!file.exists(here('data/CHELSA_bio1_1981-2010_V.2.1.tif'))){
   tmplt <- drive_get("CHELSA_bio1_1981-2010_V.2.1.tif")
@@ -183,7 +182,6 @@ if(!file.exists(here('data/CHELSA_bio1_1981-2010_V.2.1.tif'))){
 }
 
 raster_template <- terra::rast(here("data/CHELSA_bio1_1981-2010_V.2.1.tif"))
-
 
 # County boundary
 target_counties <- target_counties
@@ -227,9 +225,10 @@ DP_occ_unique <- DP_occ_clean_with_grid %>%
   slice(1) %>%  # Keep the first record in each group
   ungroup()
 
+head(DP_occ_unique$geometry)
 # save the cleaned dataframe
 write_csv(DP_occ_unique,
-          file.path(occ_dir, 'DP-Portal-final.csv'))
+          file.path(here(occ_dir, 'animals'), 'DP_portal_animals_cleaned.csv'))
 
 # Upload to google drive
 # Get the target folder first to ensure it exists
