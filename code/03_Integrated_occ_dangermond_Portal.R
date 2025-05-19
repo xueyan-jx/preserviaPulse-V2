@@ -175,6 +175,7 @@ DP_occ_clean <- DP_occ_clean %>%
 write.table(DP_occ_clean, here('data/occurrences/animals/DP_clean_animals_0519.csv'), sep= ';')
 
 # ----------- 8. Keep only one record for each grid -----------
+# Note: for merging animal species, I did not run this here
 #---------(1) Create fishnet using climate data (CHELSA_bio1) ------
 if(!file.exists(here('data/CHELSA_bio1_1981-2010_V.2.1.tif'))){
   tmplt <- drive_get("CHELSA_bio1_1981-2010_V.2.1.tif")

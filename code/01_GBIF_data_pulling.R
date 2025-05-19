@@ -537,6 +537,10 @@ write_sheet(occ_num_info, pt_info, sheet = "Occurrence number changes")
 
 
 # --------------------- 5. Merge animal species -----------------
+# Note: before step 5, first go to Integrated_occ_dangermond_Portal.R to get dp data for animals
+# And then go to mergeAnimalOcc.R to create merge files (all projected in 4326)
+# Then come back to this
+
 # for merging animal species
 anim_dir <- here('data/occurrences/animals/')
 cleaned_animal_files <- list.files(path=anim_dir, pattern = 'merged*')
