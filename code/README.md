@@ -22,7 +22,7 @@ Study area: the Dangermond Preserve in Santa Barbara county located within the t
     * Purpose: to be filled.
 * [03_Integrated_occ_dangermond_Portal.R](../code/03_Integrated_occ_dangermond_Portal.R)
     * Purpose: grab data from the Dangermond Data Portal and clean species data.
-* [04_GBIF_BIEN_DP_merge.R](../code/04_GBIF_BIEN_DP_Cal_merge.R)
+* [04_GBIF_BIEN_DP_Cal_merge.R](../code/04_GBIF_BIEN_DP_Cal_merge.R)
     * Purpose: merge plant species data from multiple sources.
 * [05_mergeAnimalOcc.R](../code/05_mergeAnimalOcc.R)
     * Purpose: merge animal species data from multiple sources.
