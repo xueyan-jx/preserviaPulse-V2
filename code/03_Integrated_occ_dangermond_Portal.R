@@ -1,7 +1,7 @@
-## Purpose of script: grab integrated_occurrences_dangermond_Portal data
+## Purpose of script: merge and clean dangermond_Portal data and calflroa data
 ## Authors: GEOG 274
 ## Date: Spring, 2025
-## Credits to: Wenxin Yang, Jacqueline Vogel, Yanni Zhan, Xue Yan
+## Credits to: Wenxin Yang, Yanni Zhan, Xue Yan
 
 # ------------- Setting up --------------
 # Install and load packages
@@ -51,35 +51,84 @@ all_names <- all_names %>% mutate(
 
 scientific_names <- unique(all_names$`Name (Latin)`)
 
-## ------------ 2. Get information from dangermond portal ------------
-# download from google drive
-dp_gdrive <- drive_find(pattern = "integrated_occurrences_dangermond.csv", type = "csv")
-drive_download(dp_gdrive[1,]$id, path = here('data/occurrences/integrated_occurrences_dangermond.csv'))
-DP_portal_occ <- read.csv("data/occurrences/integrated_occurrences_dangermond.csv",
+# ------------ 2. Get data ------------
+## ------------ (1) Read data ------------
+DP_portal_occ <- read.csv("E:/OneDrive/UCSB/Class/GEOG274/preserviaPulse/data/occurrences/integrated_occurrences_dangermond_Portal.csv",
                            quote = "\"",
                            stringsAsFactors = FALSE,
                            fileEncoding = "UTF-8")
 
-# Xue's Comments: in this file, column "scientificName" includes species and subspecies
+cal_Surf_Thistle <- read.csv("E:/OneDrive/UCSB/Class/GEOG274/preserviaPulse/data/occurrences/calflora-Surf Thistle.csv",
+                             quote = "\"",
+                             stringsAsFactors = FALSE,
+                             fileEncoding = "UTF-8")
+
+cal_Ribes <- read.csv("E:/OneDrive/UCSB/Class/GEOG274/preserviaPulse/data/occurrences/calflora-out-bitter-gooseberry.csv",
+                             quote = "\"",
+                             stringsAsFactors = FALSE,
+                             fileEncoding = "UTF-8")
+
+
+cal_horkelia <- read.csv("E:/OneDrive/UCSB/Class/GEOG274/preserviaPulse/data/occurrences/calflora-out-horkelia.csv",
+                             quote = "\"",
+                             stringsAsFactors = FALSE,
+                             fileEncoding = "UTF-8")
+
+## ------------ (2) Rename the three species from Calflora  ------------
+cal_Surf_Thistle$Species <- "Cirsium rhothophilum"
+cal_Ribes$Species <- "Ribes amarum hoffmannii"
+cal_horkelia$Species <- "Horkelia cuneata sericea"
+
+## ------------ (3) Rename the column name in Calflora data to match DP_portal data  ------------
+# Define a function for rename column name in Calflora data
+rename_columns <- function(df) {
+  names(df)[names(df) == "Species"] <- "species"
+  names(df)[names(df) == "Date"] <- "eventDate"
+  names(df)[names(df) == "Longitude"] <- "longitude"
+  names(df)[names(df) == "Latitude"] <- "latitude"
+  names(df)[names(df) == "Source"] <- "source"
+  return(df)
+}
+
+# Rename the column name in Calflora data
+cal_Surf_Thistle <- rename_columns(cal_Surf_Thistle)
+cal_Ribes <- rename_columns(cal_Ribes)
+cal_horkelia <- rename_columns(cal_horkelia)
+
+## ------------ (4) Rename column name in DP_portal data and remove nonplant records  ------------
+# Xue's Comments: in DP_portal data, column "scientificName" includes species and subspecies
 # Names in column "species" includes species (higher hierarchy) or has error (e.g., No. 41: Equisetum telmateia braunii is not the subspecies of Equisetum braunii)
 # For matching the name with GBIF and BIEN, here we use "scientificName" and revise the column names
 colnames(DP_portal_occ)[colnames(DP_portal_occ) == "species"] <- "species_name_with_error"
 colnames(DP_portal_occ)[colnames(DP_portal_occ) == "scientificName"]=c("species")
+
+DP_portal_occ <- DP_portal_occ %>% 
+  filter(kingdom =="Plantae")
+
+## ------------ (5) Combine Calflora and DP_portal data  ------------
+DP_cal <- bind_rows(DP_portal_occ, cal_Surf_Thistle, cal_Ribes, cal_horkelia)
+
 # Exclude NA 
-DP_portal_occ <- DP_portal_occ %>% 
-  filter(!is.na(species))
+DP_cal <- DP_cal %>%
+  filter(
+    !is.na(species),
+    !is.na(latitude),
+    !is.na(longitude),
+    !is.na(eventDate)
+  )
 
-#---------------3. Exclude records from GBIF and iNaturalist and non-plant record-------------
-# change the syntax to include or exclude plants
-#Plantae for plants, Animalia for animals
-unique(DP_portal_occ$kingdom)
-DP_portal_occ <- DP_portal_occ %>% 
-  filter(source!="GBIF" & source!="iNaturalist" & kingdom =="Animalia")
+#---------------3. Exclude records from GBIF and iNaturalist-------------
+DP_cal <- DP_cal %>% 
+  filter(source!="GBIF" & source!="iNaturalist")
 
+# Xue's comment: keep records with unclear source
 
 # ------------- 4. Exclude records before 1980----------
-DP_portal_occ <- DP_portal_occ %>% filter(year >=1980)
-unique(DP_portal_occ$year)
+DP_cal <- DP_cal %>%
+  mutate(eventDate = as.Date(eventDate)) %>%           
+  filter(eventDate >= as.Date("1980-01-01") & eventDate <= as.Date("2025-05-19")) # There are errors in date (2069), so add this filter 
+
+unique(DP_cal$eventDate)
 
 # ------------ 5. Exclude species with no records -----------
 # Function to remove taxonomic rank indicators such as ssp., var., subsp., etc.
@@ -119,11 +168,11 @@ clean_names <- remove_rank_indicators_df(scientific_names_df$scientificName)
 unique_species <- unique(clean_names)
 
 # Identify species in 'unique_species' that are missing from the occurrence data
-missing_from_list <- setdiff(unique_species$cleaned_name, DP_portal_occ$species)
+missing_from_list <- setdiff(unique_species$cleaned_name, DP_cal$species)
 print(missing_from_list)
 
 # Filter data to species with records
-DP_portal_filtered <- DP_portal_occ %>%
+DP_cal_filtered <- DP_cal %>%
   filter(tolower(species) %in% tolower(unique_species$cleaned_name))
 
 # Find missing species
@@ -137,18 +186,17 @@ DP_portal_filtered <- DP_portal_occ %>%
 #write_sheet(missing_species, pt_info, sheet = "GBIF missing species")
 
 # ------------- 6. Remove duplicates and rows with invalid coordinates----------
-DP_portal_filtered <- DP_portal_filtered %>%
-  filter(!is.na(longitude) & !is.na(latitude)) %>%   
+DP_cal_filtered <- DP_cal_filtered %>%
   group_by(species, longitude, latitude, eventDate, year) %>%
   filter(row_number() == 1) %>%
   ungroup()
 
 # ------------- 7. Other filter ----------
 # CoordinateCleaner Wrapper
-DP_portal_filtered <- DP_portal_filtered %>% mutate(record_id = row_number())
+DP_cal_filtered <- DP_cal_filtered %>% mutate(record_id = row_number())
 flag_cols_keep <- c('record_id', '.val', '.inst') #flag problems
 
-flags_DP <- clean_coordinates(x = DP_portal_filtered, 
+flags_DP <- clean_coordinates(x = DP_cal_filtered, 
                                 lon = "longitude", 
                                 lat = "latitude", 
                                 species = "species", 
@@ -156,20 +204,20 @@ flags_DP <- clean_coordinates(x = DP_portal_filtered,
 
 # remove rows with invalid coordinates
 ids_DP_invalid <- flags_DP[flags_DP$`.val` == FALSE, ]$record_id
-DP_occ_clean <- DP_portal_filtered %>% filter(!record_id %in% ids_DP_invalid)
+DP_cal_clean <- DP_cal_filtered %>% filter(!record_id %in% ids_DP_invalid)
 
 # remove rows recorded in biodiversity institutions
 ids_DP_inst <- flags_DP[flags_DP$`.inst` == FALSE, ]$record_id
-DP_occ_clean <- DP_occ_clean %>% filter(!record_id %in% ids_DP_inst)
+DP_cal_clean <- DP_cal_clean %>% filter(!record_id %in% ids_DP_inst)
 
 # Get datasource and summarize the information
-unique(DP_occ_clean$source) 
+unique(DP_cal_clean$source) 
 
-DP_occ_clean %>% group_by(source) %>%
+DP_cal_clean %>% group_by(source) %>%
   summarize(n=n())
 
 ## Remove records with uncertainty >1000 meters
-DP_occ_clean <- DP_occ_clean %>%
+DP_cal_clean <- DP_cal_clean %>%
   filter(coordinateUncertaintyInMeters <=1000 | is.na(coordinateUncertaintyInMeters))
 
 write.table(DP_occ_clean, here('data/occurrences/animals/DP_clean_animals_0519.csv'), sep= ';')
@@ -208,28 +256,28 @@ if (!"grid_id" %in% colnames(fishnet_clipped)) {
 
 # ---------(2) Convert cleaned DP data to spatial data ------
 # Convert to spatial data
-DP_occ_clean_sf <- st_as_sf(DP_occ_clean, coords = c("longitude", "latitude"), crs = 4326)
+DP_cal_clean_sf <- st_as_sf(DP_cal_clean, coords = c("longitude", "latitude"), crs = 4326)
 
 # Reproject to match the fishnet CRS
-DP_occ_clean_sf <- st_transform(DP_occ_clean_sf, st_crs(fishnet_clipped))
+DP_cal_clean_sf <- st_transform(DP_cal_clean_sf, st_crs(fishnet_clipped))
 
 # ---------(3) Reduce records ------
 # Spatial join: assign each point to a fishnet polygon
-DP_occ_clean_with_grid <- st_join(DP_occ_clean_sf, fishnet_clipped)
+DP_cal_clean_with_grid <- st_join(DP_cal_clean_sf, fishnet_clipped)
 
 # Remove points that do not fall into any fishnet cell (i.e., those with NA grid_id)
-DP_occ_clean_with_grid <- DP_occ_clean_with_grid %>% filter(!is.na(grid_id))
+DP_cal_clean_with_grid <- DP_cal_clean_with_grid %>% filter(!is.na(grid_id))
 
 # For each species and grid cell, keep only one record
-DP_occ_unique <- DP_occ_clean_with_grid %>%
+DP_cal_unique <- DP_cal_clean_with_grid %>%
   group_by(species, grid_id) %>%
   slice(1) %>%  # Keep the first record in each group
   ungroup()
 
 head(DP_occ_unique$geometry)
 # save the cleaned dataframe
-write_csv(DP_occ_unique,
-          file.path(here(occ_dir, 'animals'), 'DP_portal_animals_cleaned.csv'))
+write_csv(DP_cal_unique,
+          file.path(occ_dir, 'DP_cal-final.csv'))
 
 # Upload to google drive
 # Get the target folder first to ensure it exists
@@ -237,9 +285,9 @@ speciesObs_folder <- drive_find(pattern = "speciesObs", type = "folder")
 if(nrow(speciesObs_folder) > 0) {
   # Upload to Google Drive if folder found
   drive_upload(
-    file.path(occ_dir, 'DP-Portal-final.csv'),
+    file.path(occ_dir, 'DP_cal-final.csv'),
     path = as_id(speciesObs_folder$id[1]),
-    name = 'DP-Portal-final.csv'
+    name = 'DP_cal-final.csv'
   )
 } else {
   warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
