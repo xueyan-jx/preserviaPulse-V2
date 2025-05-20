@@ -1,4 +1,4 @@
-## Purpose of script: Merge records from GBIF, BIEN, and DP_portal
+## Purpose of script: Merge records from GBIF, BIEN, DP_portal, and Calflora
 ## Authors: GEOG 274
 ## Date: Spring, 2025
 ## Credits to: Yanni Zhan, Xue Yan
@@ -32,7 +32,7 @@ gs4_auth(token = drive_token())
 # while keeping the genus, species, and any subspecies or variety names
 # Only keep the first three words in the name
 # Note this is not a perfect function to clean names 
-# Just works for "species" column. For "scientificName" doesn't work due to complex name method
+# Just works for "species" column. For "scientificName" doesn't work due to complex name
 remove_rank_indicators_df <- function(name_vec) {
   cleaned_names <- sapply(name_vec, function(name) {
     # Convert the whole name to lowercase for consistent matching
@@ -87,9 +87,9 @@ if(!file.exists(here('data/CHELSA_bio1_1981-2010_V.2.1.tif'))){
 
 # List of filenames to check and download if missing
 files_to_check <- c(
-  "Plant-GBIF0000607-250515123054153-final.csv",
+  "GBIF-plants-cleaned-0515.csv",
   "BIEN-final.csv",
-  "DP-Portal-final.csv"
+  "DP_cal-final.csv"
 )
 
 # Loop through each file to check if it exists locally; if not, download from Google Drive
@@ -112,40 +112,70 @@ for (fname in files_to_check) {
 }
 
 # Read the three data files using `here` for consistent paths
-GBIF_occ_final <- read_csv(here("data", "Plant-GBIF0000607-250515123054153-final.csv"))
+GBIF_occ_final <- read_csv(here("data", "GBIF-plants-cleaned-0515.csv"))
 BIEN_occ_final <- read_csv(here("data", "BIEN-final.csv"))
-DP_portal_occ_final <- read_csv(here("data", "DP-Portal-final.csv"))
+DP_cal_occ_final <- read_csv(here("data", "DP_cal-final.csv"))
 
 # Check column names from the three datasets 
 # and rename them so that they match each other
 colnames(GBIF_occ_final)
 colnames(BIEN_occ_final)
-colnames(DP_portal_occ_final)
+colnames(DP_cal_occ_final)
 colnames(BIEN_occ_final)[1:2]=c("species","eventDate")
 
 # Merge the three datasets
 BIEN_occ_final$eventDate <- as.character(BIEN_occ_final$eventDate) #Make sure data types in eventDate are consistent
-DP_portal_occ_final$eventDate <- as.character(DP_portal_occ_final$eventDate)
-GBIF_BIEN_DP <- bind_rows(GBIF_occ_final, BIEN_occ_final, DP_portal_occ_final)
+DP_cal_occ_final$eventDate <- as.character(DP_cal_occ_final$eventDate)
+GBIF_BIEN_DP_Cal <- bind_rows(GBIF_occ_final, BIEN_occ_final, DP_cal_occ_final)
 
-glimpse(GBIF_BIEN_DP)
+glimpse(GBIF_BIEN_DP_Cal)
+
+#-------------3. Organize the merged data -------------
+# Due to the "scientificName" column from GBIF includes some subspecies that we didn't recognize in column "species"
+# Here we need further organize the merged data for the 6 containing subspecies (within the 20 species that DP most care about)
+# The code in this part might need to revise if we want to take a look at all species in our list (over 200 ish)
+
+## "scientificName" column
+# Visual check scientificName needed
+unique(GBIF_BIEN_DP_Cal$scientificName)[order(unique(GBIF_BIEN_DP_Cal$scientificName))]
+
+# Filter based on scientificName
+#scitic_lst <- c("Deinandra increscens subsp. villosa (Tanowitz) B.G.Baldwin",
+#                "Astragalus nuttallii var. nuttallii",
+#                "Malacothrix saxatilis var. saxatilis", 
+#                "Lilium humboldtii subsp. ocellatum (Kellogg) Thorne",
+#                "Ribes amarum var. hoffmannii Munz",
+#                "Horkelia cuneata var. sericea (A.Gray) Ertter & Reveal")
+
+# Rename "species" column if scientificName includes subspecies in scitic_lit
+GBIF_BIEN_DP_Cal <- GBIF_BIEN_DP_Cal %>%
+  mutate(species = case_when(
+    scientificName == "Deinandra increscens subsp. villosa (Tanowitz) B.G.Baldwin" ~ "Deinandra increscens villosa",
+    scientificName == "Astragalus nuttallii var. nuttallii"                         ~ "Astragalus nuttallii nuttallii",
+    scientificName == "Malacothrix saxatilis var. saxatilis"                        ~ "Malacothrix saxatilis saxatilis",
+    scientificName == "Lilium humboldtii subsp. ocellatum (Kellogg) Thorne"        ~ "Lilium humboldtii ocellatum",
+    scientificName == "Ribes amarum var. hoffmannii Munz"                           ~ "Ribes amarum hoffmannii",
+    scientificName == "Horkelia cuneata var. sericea (A.Gray) Ertter & Reveal"      ~ "Horkelia cuneata sericea",
+    TRUE ~ species  # Keep original if no match
+  ))
+
 
 # View duplicates
-GBIF_BIEN_DP %>%
+GBIF_BIEN_DP_Cal %>%
   group_by(species, geometry) %>%
   filter(n() > 1)
 
 # Remove duplicates
-GBIF_BIEN_DP_unique <- GBIF_BIEN_DP %>%
+GBIF_BIEN_DP_Cal_unique <- GBIF_BIEN_DP_Cal %>%
   distinct(species, geometry, .keep_all = TRUE)
 
 # Check the records number for species
-GBIF_BIEN_DP_unique_stat <- GBIF_BIEN_DP_unique %>%
+GBIF_BIEN_DP_Cal_stat <- GBIF_BIEN_DP_Cal_unique %>%
   group_by(species) %>%
   summarize(n=n())
 
 # Plot the results
-ggplot(GBIF_BIEN_DP_unique_stat, aes(x = reorder(species, -n), y = n)) +
+ggplot(GBIF_BIEN_DP_Cal_stat, aes(x = reorder(species, -n), y = n)) +
   geom_bar(stat = "identity") +
   labs(
     title = "Species Occurrence Counts",
@@ -159,7 +189,7 @@ ggplot(GBIF_BIEN_DP_unique_stat, aes(x = reorder(species, -n), y = n)) +
   )
 
 
-# ----------- 3. Keep only one record for each grid -----------
+# ----------- 4. Keep only one record for each grid -----------
 #---------(1) Create fishnet using climate data (CHELSA_bio1) ------
 if(!file.exists(here('data/CHELSA_bio1_1981-2010_V.2.1.tif'))){
   tmplt <- drive_get("CHELSA_bio1_1981-2010_V.2.1.tif")
@@ -193,28 +223,28 @@ if (!"grid_id" %in% colnames(fishnet_clipped)) {
 
 # ---------(2) Convert merged data to spatial data ------
 # Extract coordinate
-GBIF_BIEN_DP_unique <- GBIF_BIEN_DP_unique %>%
+GBIF_BIEN_DP_Cal_unique <- GBIF_BIEN_DP_Cal_unique %>%
   mutate(
     x = as.numeric(str_extract(geometry, "(?<=c\\()[0-9.]+")),
     y = as.numeric(str_extract(geometry, "(?<=, )[0-9.]+"))
   )
 
 # Convert to spatial data
-GBIF_BIEN_DP_unique_sf <- st_as_sf(
-  GBIF_BIEN_DP_unique,
+GBIF_BIEN_DP_Cal_unique_sf <- st_as_sf(
+  GBIF_BIEN_DP_Cal_unique,
   coords = c("x", "y"),
   crs = 2229 # same crs to fishnet_clipped
 )
 
 # ---------(3) Reduce records ------
 # Spatial join: assign each point to a fishnet polygon
-GBIF_BIEN_DP_with_grid <- st_join(GBIF_BIEN_DP_unique_sf, fishnet_clipped)
+GBIF_BIEN_DP_Cal_grid <- st_join(GBIF_BIEN_DP_Cal_unique_sf, fishnet_clipped)
 
 # Remove points that do not fall into any fishnet cell (i.e., those with NA grid_id)
-GBIF_BIEN_DP_with_grid <- GBIF_BIEN_DP_with_grid %>% filter(!is.na(grid_id.x))
+GBIF_BIEN_DP_Cal_grid <- GBIF_BIEN_DP_Cal_grid %>% filter(!is.na(grid_id.x))
 
 # For each species and grid cell, keep only one record
-GBIF_BIEN_DP_final <- GBIF_BIEN_DP_with_grid %>%
+GBIF_BIEN_DP_Cal_final <- GBIF_BIEN_DP_Cal_grid %>%
   group_by(species, grid_id.x) %>%
   slice(1) %>%  # Keep the first record in each group
   ungroup()
@@ -231,8 +261,8 @@ GBIF_BIEN_DP_final <- GBIF_BIEN_DP_with_grid %>%
 #  mutate(cleaned_name = clean_names_finaldata$cleaned_name)
 
 # save the cleaned dataframe
-write_csv(GBIF_BIEN_DP_final,
-          file.path(occ_dir, 'GBIF_BIEN_DP_final.csv'))
+write_csv(GBIF_BIEN_DP_Cal_final,
+          file.path(occ_dir, 'GBIF_BIEN_DP_Cal_final.csv'))
 
 # Upload to google drive
 # Get the target folder first to ensure it exists
@@ -240,9 +270,9 @@ speciesObs_folder <- drive_find(pattern = "speciesObs", type = "folder")
 if(nrow(speciesObs_folder) > 0) {
   # Upload to Google Drive if folder found
   drive_upload(
-    file.path(occ_dir, 'GBIF_BIEN_DP_final.csv'),
+    file.path(occ_dir, 'GBIF_BIEN_DP_Cal_final.csv'),
     path = as_id(speciesObs_folder$id[1]),
-    name = 'GBIF_BIEN_DP_final.csv'
+    name = 'GBIF_BIEN_DP_Cal_final.csv'
   )
 } else {
   warning("Could not find 'speciesObs' folder in Google Drive. File saved locally only.")
@@ -250,10 +280,10 @@ if(nrow(speciesObs_folder) > 0) {
 
 # ----------- 4. Check final records number for species -----------
 # ------------(1) Check final records number for all plants------
-GBIF_BIEN_DP_final_stat <- GBIF_BIEN_DP_final %>%
+GBIF_BIEN_DP_Cal_final_stat <- GBIF_BIEN_DP_Cal_final %>%
   group_by(species) %>%
   summarize(n=n())
-write.csv(GBIF_BIEN_DP_final_stat, 
+write.csv(GBIF_BIEN_DP_Cal_final_stat, 
           file.path(occ_dir, "Plant_occurrences_stat.csv"),
           row.names = FALSE)
 
@@ -266,15 +296,15 @@ clean_names_list <- remove_rank_indicators_df(scientific_names_df$scientificName
 
 # Get the top 
 top20_plants <- clean_names_list$cleaned_name[1:20]
-GBIF_BIEN_DP_final_stat_top20 <- GBIF_BIEN_DP_final_stat %>%
+GBIF_BIEN_DP_Cal_final_stat_top20 <- GBIF_BIEN_DP_Cal_final_stat %>%
   filter(species %in% top20_plants)
 
-write.csv(GBIF_BIEN_DP_final_stat_top20, 
+write.csv(GBIF_BIEN_DP_Cal_final_stat_top20, 
           file.path(occ_dir, "Plant_occurrences_stat_Top20.csv"),
           row.names = FALSE)
 
 # Missing species
-not_found <- setdiff(top20_plants, GBIF_BIEN_DP_final_stat$species)
+not_found <- setdiff(top20_plants, GBIF_BIEN_DP_Cal_final_stat$species)
 
 
 
