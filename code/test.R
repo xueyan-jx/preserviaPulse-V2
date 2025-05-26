@@ -1,6 +1,7 @@
 library(SSDM)
 library(raster)
 library(here)
+library(spatialEco)
 
 occ_pre <- read.csv(here('data/occurrences/animals/animals-data-ready-occ-0519.csv'))
 colnames(occ_pre)
@@ -27,11 +28,20 @@ occ_abs$Presence <- 0
 occ_target <- rbind(occ_pre_target[,-2], occ_abs)
 
 
-Env <- load_var(path = 'data/env', format = '.tif', verbose = FALSE)
+# --------------------- read in env. vars --------------
+Env = rast("final_env_1980_2010_stack.tif")
 Env
 
+# z-score normalization
+Env_z = raster.Zscore(Env)
 
-seq_len(length(occ_target$fold))
+Env_z = stack(Env_z)
+Env_z
+
+##### Sampling weight
+prNum <- sum(occ_target$Presence == 1) # number of presence records
+bgNum <- sum(occ_target$Presence == 0)
+wt <- ifelse(occ_target$Presence == 1, 1, prNum / bgNum
 
 SDM <- modelling('GLM', occ_target, 
                  Env, Xcol = 'x', Ycol = 'y', Pcol = "Presence",
