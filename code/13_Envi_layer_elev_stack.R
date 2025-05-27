@@ -16,7 +16,17 @@ here() # first check path
 # Define folder for boundary and elevation leyers
 layer_dir <- here("data", "Elevation")
 # if it's not there already, create it
-if (!dir.exists(layer_dir)) dir.create(layer_dir, recursive = TRUE) 
+if (!dir.exists(layer_dir)) dir.create(layer_dir, recursive = TRUE)
+
+# Load raster template
+template_raster <- rast("data/raster_template.tif")
+
+# Load refined county boundry
+refined_county_sf <- st_read("data/threecounties_refine.geojson")
+refined_county_vect <- vect(refined_county_sf)
+# Convert and reproject boundary to EPSG:2229
+refined_county_vect_proj <- project(vect(refined_county_sf), crs(template_raster))
+
 
 #------------- 1. Boundary Data Preparation  -------------
 # a) Load California county boundaries (download separately from: 
@@ -154,4 +164,118 @@ plot(log_accum, main = "Flow Accumulation (log scale)", col = hcl.colors(100, "Y
 writeRaster(flow_accum,
             filename = file.path(layer_dir, "flow_accum_three_county.tif"),
             overwrite = TRUE)
+
+# ------------- 5. Distance to Coast -----------------------------
+# Load your combined plant/animal data
+anim_plant_df <- read.csv("data/Anim_Plant_merge.csv")
+
+# Convert to sf object (assuming x and y are in State Plane Zone 5, EPSG:2229)
+anim_plant_sf <- st_as_sf(anim_plant_df, coords = c("x", "y"), crs = 2229)
+
+# Load coastline shapefile (adjust path)
+coastline <- st_read("data/Elevation/ECU_clipped/county_ECU.shp")
+
+# Reproject to match animal/plant points
+coastline_2229 <- st_transform(coastline, crs = 2229)
+
+# Compute distance from each observation to the coastline
+dist_matrix <- st_distance(anim_plant_sf, coastline_2229)  # units: US survey feet
+
+# Extract minimum distance for each row (across all coastal polygons/lines)
+min_distances <- apply(dist_matrix, 1, min)
+
+# Add as a new column (as numeric)
+anim_plant_sf$distance_to_coast <- as.numeric(min_distances)
+
+# Extract coordinates from geometry
+coords <- st_coordinates(anim_plant_sf)
+
+# Add x and y back to the dataframe
+anim_plant_df_with_coords <- anim_plant_sf %>%
+  st_drop_geometry() %>%
+  mutate(x = coords[, 1],
+         y = coords[, 2])
+
+# Write to CSV with distance_to_coast, x, and y included
+write.csv(anim_plant_df_with_coords, "data/Anim_Plant_merge_with_dist_to_coast.csv", row.names = FALSE)
+
+# Convert to terra vector
+dist_vect <- vect(anim_plant_sf)
+
+# Rasterize using the template
+dist_raster <- rasterize(dist_vect, template_raster, field = "distance_to_coast")
+
+# Visualize
+plot(dist_raster, main = "Distance to Coast (Rasterized)")
+
+# Save output
+writeRaster(dist_raster, "data/Elevation/dist_to_coast.tif", overwrite = TRUE)
+
+
+# ------------- 6. Stack Environmental layers -----------------------------
+# -------- 6a. Load and preprocess layers -----------------
+# Load individual layers
+slope <- rast(file.path(layer_dir, "slope_three_county_deg.tif"))
+aspect <- rast(file.path(layer_dir, "aspect_three_county_deg.tif"))
+flow_acc <- rast(file.path(layer_dir, "flow_accum_three_county.tif"))
+dist_coast <- rast(file.path(layer_dir, "dist_to_coast.tif"))
+solar <- rast(file.path(layer_dir, "AreaSol_srtm_30m_Clip3Counties.tif"))
+# Set values < 691015 to NA (optional cleanup)
+solar[solar < 691015] <- NA
+
+climate_paths <- list(
+  past = "projected_selectedbios_1980_2010_stack.tif",
+  ssp126 = "projected_selectedbios_2040_2070_GFDL_SSP126_stack.tif",
+  ssp370 = "projected_selectedbios_2040_2070_GFDL_SSP370_stack.tif",
+  ssp585 = "Projected__selectedbios_2040_2070_GFDL_SSP585_stack.tif"
+)
+
+climate_rasters <- lapply(climate_paths, function(path) {
+  rast(file.path(here("data", "ClimateVariables"), path))
+})
+
+# Rename all climate layer bands consistently
+climate_names <- c("bio1", "bio15", "bio17", "bio18", "bio3", "bio5", "bio6")
+names(climate_rasters$past) <- climate_names
+names(climate_rasters$ssp126) <- climate_names
+names(climate_rasters$ssp370) <- climate_names
+names(climate_rasters$ssp585) <- climate_names
+
+# -------- 6b. Resample & Mask All Layers -----------------
+process_layer <- function(r) {
+  r_res <- resample(mask(crop(r, refined_county_vect_proj), 
+                         refined_county_vect_proj
+                         ), 
+                    template_raster
+                    )
+  mask(r_res, !is.na(template_raster))
+}
+
+# Apply processing to each environmental layer
+slope_f <- process_layer(slope)
+aspect_f <- process_layer(aspect)
+flow_acc_f <- process_layer(flow_acc)
+dist_coast_f <- process_layer(dist_raster)
+solar_f <- process_layer(solar)
+climate_f <- lapply(climate_rasters, process_layer)
+
+# -------- 6d. Stack all environmental layers together -----------------
+stack_and_save <- function(climate_layer, scenario_name) {
+  env_stack <- c(slope_f, aspect_f, flow_acc_f, dist_coast_f, 
+                 solar_f, climate_layer)
+  names(env_stack) <- c("slope", "aspect", "flow_acc", 
+                        "dist_coast", "solar", names(climate_layer))
+  writeRaster(env_stack, paste0("data/Stack_Env/final_env_", 
+                                scenario_name, ".tif"), 
+              overwrite = TRUE)
+}
+
+# Save All Stacks
+stack_and_save(climate_f$past, "1980_2010_stack")
+stack_and_save(climate_f$ssp126, "ssp126_2040_2070_stack")
+stack_and_save(climate_f$ssp370, "ssp370_2040_2070_stack")
+stack_and_save(climate_f$ssp585, "ssp585_2040_2070_stack")
+
+# Plot check
+plot(rast(file.path("data/Stack_Env/final_env_ssp126_2040_2070_stack.tif")))
 

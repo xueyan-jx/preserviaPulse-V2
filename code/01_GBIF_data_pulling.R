@@ -570,3 +570,9 @@ herps_invs_final_info <- merge(herps_invs_final_info, all_names, by.x='Var1', by
 colnames(herps_invs_final_info) <- c('Name (Latin)', 'Name (common)', 'Number')
 write_csv(herps_invs_final_info, file.path(anim_dir, 'herps_invs_final_num.csv'))
 
+# --------------------- 5. Plant cleaning -----------------
+# for plants
+plant_dir <- here('data/occurrences/plants/')
+this_df <- read.csv(file.path(plant_dir, 'GBIF0009121-250515123054153-cleaned.csv'))
+taxon <- "plants"
+plant_GBIF_final <- final_clean_sort_of_thinning(this_df, taxon, plant_dir)

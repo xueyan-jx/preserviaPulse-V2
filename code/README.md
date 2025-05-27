@@ -4,7 +4,7 @@ Study area: the Dangermond Preserve in Santa Barbara county located within the t
 
 ### Species occurrence data pulling and cleaning
 
-![test](../visualization/data_pulling_workflow.png "Flowchart")
+![test](../doc/figures/data_pulling_workflow.png "Flowchart")
 
 #### Input data: 
 * Integrated Resources Management Plan (IRMP): get special status species
@@ -22,7 +22,7 @@ Study area: the Dangermond Preserve in Santa Barbara county located within the t
     * Purpose: to be filled.
 * [03_Integrated_occ_dangermond_Portal.R](../code/03_Integrated_occ_dangermond_Portal.R)
     * Purpose: grab data from the Dangermond Data Portal and clean species data.
-* [04_GBIF_BIEN_DP_merge.R](../code/04_GBIF_BIEN_DP_merge.R)
+* [04_GBIF_BIEN_DP_Cal_merge.R](../code/04_GBIF_BIEN_DP_Cal_merge.R)
     * Purpose: merge plant species data from multiple sources.
 * [05_mergeAnimalOcc.R](../code/05_mergeAnimalOcc.R)
     * Purpose: merge animal species data from multiple sources.
@@ -38,9 +38,16 @@ Example:
 | -------| --- | --- |
 | species latin name | longitude | latitude |
 
-### Envi_layer_elev.R
 
-The script to generate slope, aspect, TRI, and flow accumulation layers from elevation (SRTM 30m) layer
+## Envi_layer_elev_stack.R
+
+The script section 1-5 generates slope, aspect, TRI, and flow accumulation layers from elevation (SRTM 30m) layer
 * Load and filter county boundaries
 * Mosaic and clip SRTM DEM
-* Compute slope, aspect, TRI, and flow accumulation layers
+* Compute slope, aspect, TRI, flow accumulation, and distance to coast layers
+
+The script section 6 stacks climate and terrain layers
+* Load slope, aspect, flow accumulation, distance to coast, solar, and climate layers
+* Clips and resamples all layers to match a common raster template provided by Lei to standardizes projection (EPSG:2229), extent, and resolution
+* Stacks layers for both current (1980–2010) and future climate scenarios (2040–2070)
+* Saves outputs in organized folders under SDM_EnvLayers/Stack_Env/
