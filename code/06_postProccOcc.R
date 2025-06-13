@@ -65,7 +65,28 @@ write.table(plants_df, file.path('data/occurrences/plants', name_plants_df), sep
 Anim_Plant_merge <- bind_rows(anim_df, plants_df)
 write.table(Anim_Plant_merge, file.path('data/occurrences/Anim_Plant_merge.csv'), sep=',', row.names = FALSE)
 
-## -------------------- 1.4 upload to gdrive -----------------------
+
+## ---------------------1.4 merge Anim_Plant_merge and data from CNDDB -------------
+CNDDB <- read.csv(here("data","occurrences","CNDDB_cleaned.csv"))
+Anim_Plant_merge <- read.csv(here("data","occurrences","Anim_Plant_merge.csv"))
+
+CNDDB <- CNDDB %>%
+  mutate(species = case_when(
+    species == "Horkelia cuneata var. sericea" ~ "Horkelia cuneata sericea",
+    species == "Empidonax traillii extimus" ~ "Empidonax traillii",
+    species == "Falco peregrinus anatum" ~ "Falco peregrinus",
+    species == "Vireo bellii pusillus" ~ "Vireo bellii",
+    species == "Charadrius nivosus nivosus" ~ "Charadrius nivosus",
+    TRUE ~ species  
+  )) # Keep the alignment of species name
+
+# Final merge
+merged_df <- bind_rows(CNDDB, Anim_Plant_merge) %>%
+  distinct(x, y, .keep_all = TRUE)
+
+write.table(merged_df, file.path('data/occurrences/Anim_Plant_merge_final0613.csv'), sep=',', row.names = FALSE)
+
+## -------------------- 1.5 upload to gdrive -----------------------
 drive_auth()
 gs4_auth(token = drive_token())
 
