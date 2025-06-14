@@ -3,7 +3,7 @@
 ## Date: Spring, 2025
 ## Credits to: Wenxin Yang, Yanni Zhan, Xue Yan, Yifei Liu
 
-library(SSDM)
+
 #library(terra)
 library(dplyr)
 library(raster)
@@ -49,22 +49,14 @@ Env_normalized_list <- lapply(Env_files, function(f) {
   return(s_std)
 })
 
-# Get species list (need to change)
-#occ <- read.csv(here("data", "occurrences", "Anim_Plant_merge.csv")) 
-#species_list <- unique(occ$species)
-
-#species_list <- list("Agelaius tricolor")
-
 
 # ------------ 2. Function for model loop ------------
 Predict_species <- function(Env_normalized_list,
                             model_dir = here("results", "models"),
-                            projection_dir = here("results", "projections"),
-                            evaluation_dir = here("results", "evaluations"),
-                            submodel_dir = here("results", "submodelsEva")) {
+                            projection_dir = here("results", "projections")) {
   
   # Get species list
-  rds_files <- list.files(model_dir, pattern = "\\.RDS$", full.names = FALSE)
+  rds_files <- list.files(model_dir, pattern = "\\.RDS$", ignore.case = TRUE, full.names = FALSE)
   if (length(rds_files) == 0) {
     stop("No .rds model files found in the model directory.")
   }
@@ -72,15 +64,7 @@ Predict_species <- function(Env_normalized_list,
   
   # Output directories
   dir.create(projection_dir, recursive = TRUE, showWarnings = FALSE)
-  dir.create(evaluation_dir, recursive = TRUE, showWarnings = FALSE)
-  dir.create(submodel_dir, recursive = TRUE, showWarnings = FALSE)
-  
-  # Output variables
-  all_algorithm_evaluation <- list()
-  all_variable_importance <- list()
-  all_submodel_evaluation <- list()            
-  all_submodel_variable_importance <- list()
-  
+
   for (sp in species_list) {
     cat("=== Modeling species:", sp, "===\n")
     
@@ -97,105 +81,77 @@ Predict_species <- function(Env_normalized_list,
       warning(paste("Failed to read model for", sp, ":", e$message))
       return(NULL)
     },write.error.dump.file = TRUE)
-    
     if (is.null(sp_model)) next
     
     for (Env in Env_normalized_list) {
       
+      proj_list <- list()
+      
       # -----Get scenario name-----
       scenario_name <- attr(Env, "scenario_name")
       base_name <- paste0(sp, "_", scenario_name)
+      cat("Projecting:", base_name, "\n")
       
       # ---- projection----
-      proj <- tryCatch({
-        project(sp_model, Env, update.projections = FALSE, SDM.projections = TRUE)
-      }, error = function(e) {
-        warning(paste("Projection failed for", sp, "in", scenario_name, ":", e$message))
-        return(NULL)
-      })
+      # GAM
+      if (!is.null(sp_model$gam)) {
+        gam_proj <- tryCatch({
+          predict(Env, sp_model$gam, type = "response") 
+        }, error = function(e) {
+          warning(paste("GAM projection failed for", sp, ":", e$message))
+          NULL
+        })
+        proj_list[["gam"]] <- gam_proj
+      }
       
-      if (is.null(proj)) next
+      # Random Forest
+      if (!is.null(sp_model$rf)) {
+        rf_proj <- tryCatch({
+          predict(Env, sp_model$rf, type = "prob", index = 2)
+        }, error = function(e) {
+          warning(paste("RF projection failed for", sp, ":", e$message))
+          NULL
+        })
+        proj_list[["rf"]] <- rf_proj
+      }
       
+      # Maxent
+      if (!is.null(sp_model$maxent)) {
+        maxent_proj <- tryCatch({
+          predict(Env, sp_model$maxent)
+        }, error = function(e) {
+          warning(paste("Maxent projection failed for", sp, ":", e$message))
+          NULL
+        })
+        proj_list[["maxent"]] <- maxent_proj
+      }
+      
+      # Stack output raster from different models
+      valid_projs <- proj_list[!sapply(proj_list, is.null)]
+      if (length(valid_projs) == 0) {
+        warning(paste("No valid projections for", sp, "in", scenario_name))
+        next
+      }
+      
+      proj_stack <- stack(valid_projs)
+      names(proj_stack) <- names(valid_projs)
+      
+      # Model ensemble
+      proj_ensemble <- calc(proj_stack, fun = mean, na.rm = TRUE)
       
       # ---- save projection ----
       projection_path <- file.path(projection_dir, paste0(base_name, "_projection.tif"))
-      writeRaster(proj@projection, filename = projection_path, format = "GTiff", overwrite = TRUE)
+      writeRaster(proj_ensemble, filename = projection_path, format = "GTiff", overwrite = TRUE)
       
-      # ---- save uncertainty ----
-      uncertainty_path <- file.path(evaluation_dir, paste0(base_name, "_uncertainty.tif"))
-      writeRaster(proj@uncertainty, filename = uncertainty_path, format = "GTiff", overwrite = TRUE)
-      
-      # ---- save overall algorithm.evaluation ----
-      alg_eval <- as.data.frame(proj@algorithm.evaluation)
-      alg_eval$Species <- sp
-      alg_eval$Scenario <- scenario_name
-      all_algorithm_evaluation[[length(all_algorithm_evaluation) + 1]] <- alg_eval
-
-      # ---- save overall variable.importance ----
-      var_imp <- as.data.frame(proj@variable.importance)
-      var_imp$Species <- sp
-      var_imp$Scenario <- scenario_name
-      all_variable_importance[[length(all_variable_importance) + 1]] <- var_imp
-      
-      # ---- save each submodel's projection ----
-      for (i in seq_along(proj@sdms)) {
-        submodel <- proj@sdms[[i]]
-        sub_name <- submodel@name
-        sub_base <- paste0(base_name, "_", sub_name)
-        
-        # Save projection for each model
-        sub_proj_path <- file.path(submodel_dir, paste0(sub_base, "_projection.tif"))
-        writeRaster(submodel@projection, filename = sub_proj_path, format = "GTiff", overwrite = TRUE)
-        
-        # Save evaluation (CSV)
-        sub_eval <- as.data.frame(submodel@evaluation)
-        sub_eval$Species <- sp
-        sub_eval$Scenario <- scenario_name
-        sub_eval$Submodel <- sub_name 
-        sub_eval_path <- file.path(submodel_dir, paste0(sub_base, "_evaluation.csv"))
-        all_submodel_evaluation[[length(all_submodel_evaluation) + 1]] <- sub_eval
-        
-        # Save variable importance (CSV)
-        sub_var_imp <- as.data.frame(submodel@variable.importance)
-        sub_var_imp$Species <- sp
-        sub_var_imp$Scenario <- scenario_name
-        sub_var_imp$Submodel <- sub_name 
-        sub_var_imp_path <- file.path(submodel_dir, paste0(sub_base, "_var_importance.csv"))
-        all_submodel_variable_importance[[length(all_submodel_variable_importance) + 1]] <- sub_var_imp
-        
       } 
     }    
   }      
-  
-  # ---- Save all forms ----
-  write.csv(do.call(rbind, all_algorithm_evaluation), 
-            file = file.path(evaluation_dir, "all_algorithm_evaluation.csv"), row.names = FALSE)
-  
-  write.csv(do.call(rbind, all_variable_importance), 
-            file = file.path(evaluation_dir, "all_variable_importance.csv"), row.names = FALSE)
-  
-  write.csv(do.call(rbind, all_algorithm_evaluation), 
-            file = file.path(evaluation_dir, "all_submodel_evaluation.csv"), row.names = FALSE)
-  
-  write.csv(do.call(rbind, all_variable_importance), 
-            file = file.path(evaluation_dir, "all_submodel_variable_importance.csv"), row.names = FALSE)
-  
-  # ---- Return all forms as a list----
-  return(list(
-    algorithm_evaluation = all_algorithm_evaluation,
-    variable_importance = all_variable_importance,
-    submodel_evaluation = all_submodel_evaluation,                         
-    submodel_variable_importance = all_submodel_variable_importance 
-  ))
-} 
 
 
 # ------------ 3. Run model for all target species ------------
 Projection_result <- Predict_species(Env_normalized_list,
                                      model_dir = here("results", "models"),
-                                     projection_dir = here("results", "projections"),
-                                     evaluation_dir = here("results", "evaluations"),
-                                     submodel_dir = here("results", "submodelsEva"))
+                                     projection_dir = here("results", "projections"))
 
 
 
@@ -244,13 +200,17 @@ calculate_uncertainty <- function(species_name, projection_dir, output_dir) {
 # Apply function to all species
 projection_dir <- "results/projections"
 output_dir <- "results/evaluations"
+species_list <- sub("\\.RDS$", "", list.files(here("results", "models"), pattern = "\\.RDS$", ignore.case = TRUE))
+if (length(species_list) == 0) {
+  stop("No .rds model files found in the model directory.")
+}
+
 
 uncertainty_results <- lapply(species_list, function(sp) {
   cat("Calculating uncertainty for:", sp, "\n")
   calculate_uncertainty(sp, projection_dir, output_dir)
 })
 
-
 # Check results
-r<- rast(here("results", "projections", "Agelaius tricolor_ssp370_projection.tif"))
+r<- rast(here("results", "evaluations", "Juglans californica_mean_scenarios.tif"))
 plot(r)
