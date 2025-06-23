@@ -16,7 +16,7 @@ select <- dplyr::select
 # ------------ 1. Get environmental and species list ------------
 # Environmental data
 ## Reference data
-ref_Env <- raster::stack(here("data", "Stack_Env", "final_env_1980_2010_stack.tif"))
+ref_Env <- raster::stack(here("data", "Stack_Env", "combined_stack_hist.tif"))
 
 ## Projection data
 Env_files <- list.files(here("data", "Stack_Env"), 
@@ -52,7 +52,7 @@ Env_normalized_list <- lapply(Env_files, function(f) {
 
 # ------------ 2. Function for model loop ------------
 Predict_species <- function(Env_normalized_list,
-                            model_dir = here("results", "models"),
+                            model_dir = here("results", "models","plant"),
                             projection_dir = here("results", "projections")) {
   
   # Get species list
@@ -150,7 +150,7 @@ Predict_species <- function(Env_normalized_list,
 
 # ------------ 3. Run model for all target species ------------
 Projection_result <- Predict_species(Env_normalized_list,
-                                     model_dir = here("results", "models"),
+                                     model_dir = here("results", "models","plant"),
                                      projection_dir = here("results", "projections"))
 
 
@@ -198,9 +198,9 @@ calculate_uncertainty <- function(species_name, projection_dir, output_dir) {
 }
 
 # Apply function to all species
-projection_dir <- "results/projections"
-output_dir <- "results/evaluations"
-species_list <- sub("\\.RDS$", "", list.files(here("results", "models"), pattern = "\\.RDS$", ignore.case = TRUE))
+projection_dir <- "results/projections/plant"
+output_dir <- "results/evaluations/plant"
+species_list <- sub("\\.RDS$", "", list.files(here("results", "models","plant"), pattern = "\\.RDS$", ignore.case = TRUE))
 if (length(species_list) == 0) {
   stop("No .rds model files found in the model directory.")
 }
@@ -212,5 +212,5 @@ uncertainty_results <- lapply(species_list, function(sp) {
 })
 
 # Check results
-r<- rast(here("results", "evaluations", "Juglans californica_mean_scenarios.tif"))
-plot(r)
+# r<- rast(here("results", "evaluations", "Juglans californica_mean_scenarios.tif"))
+# plot(r)
