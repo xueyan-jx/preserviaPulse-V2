@@ -10,6 +10,12 @@ library(raster)
 library(here)
 library(spatialEco)
 library(tryCatchLog)
+library(mgcv)
+library(dismo)
+library(randomForest)
+library(pROC)
+library(caret)
+
 select <- dplyr::select
 
 
@@ -52,8 +58,8 @@ Env_normalized_list <- lapply(Env_files, function(f) {
 
 # ------------ 2. Function for model loop ------------
 Predict_species <- function(Env_normalized_list,
-                            model_dir = here("results", "models","plant"),
-                            projection_dir = here("results", "projections")) {
+                            model_dir = here("results", "models","mammal"),
+                            projection_dir = here("results", "projections","mammal")) {
   
   # Get species list
   rds_files <- list.files(model_dir, pattern = "\\.RDS$", ignore.case = TRUE, full.names = FALSE)
@@ -150,8 +156,8 @@ Predict_species <- function(Env_normalized_list,
 
 # ------------ 3. Run model for all target species ------------
 Projection_result <- Predict_species(Env_normalized_list,
-                                     model_dir = here("results", "models","plant"),
-                                     projection_dir = here("results", "projections"))
+                                     model_dir = here("results", "models","mammal"),
+                                     projection_dir = here("results", "projections","mammal"))
 
 
 
@@ -198,9 +204,9 @@ calculate_uncertainty <- function(species_name, projection_dir, output_dir) {
 }
 
 # Apply function to all species
-projection_dir <- "results/projections/plant"
-output_dir <- "results/evaluations/plant"
-species_list <- sub("\\.RDS$", "", list.files(here("results", "models","plant"), pattern = "\\.RDS$", ignore.case = TRUE))
+projection_dir <- "results/projections/mammal"
+output_dir <- "results/evaluations/mammal"
+species_list <- sub("\\.RDS$", "", list.files(here("results", "models","mammal"), pattern = "\\.RDS$", ignore.case = TRUE))
 if (length(species_list) == 0) {
   stop("No .rds model files found in the model directory.")
 }
@@ -212,5 +218,5 @@ uncertainty_results <- lapply(species_list, function(sp) {
 })
 
 # Check results
-# r<- rast(here("results", "evaluations", "Juglans californica_mean_scenarios.tif"))
-# plot(r)
+r <- rast(here("results", "evaluations", "plant","Abronia maritima_mean_scenarios.tif"))
+plot(r)
