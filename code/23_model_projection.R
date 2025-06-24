@@ -112,7 +112,7 @@ Predict_species <- function(Env_normalized_list,
         
         
         # GAM binary
-        gam_bin <- (gam_proj > as.numeric(sp_model$gam_thresh))*1
+        gam_bin <- (gam_proj > as.numeric(sp_model$gam_thresh))*1 # as.integer should also work
         gam_bin <- mask(gam_bin, gam_proj)
         binary_rasters[["gam"]] <- gam_bin
         
