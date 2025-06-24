@@ -92,6 +92,7 @@ Predict_species <- function(Env_normalized_list,
     for (Env in Env_normalized_list) {
       
       proj_list <- list()
+      binary_rasters <- list() 
       
       # -----Get scenario name-----
       scenario_name <- attr(Env, "scenario_name")
@@ -108,6 +109,13 @@ Predict_species <- function(Env_normalized_list,
           NULL
         })
         proj_list[["gam"]] <- gam_proj
+        
+        
+        # GAM binary
+        gam_bin <- (gam_proj > as.numeric(sp_model$gam_thresh))*1
+        gam_bin <- mask(gam_bin, gam_proj)
+        binary_rasters[["gam"]] <- gam_bin
+        
       }
       
       # Random Forest
@@ -119,6 +127,12 @@ Predict_species <- function(Env_normalized_list,
           NULL
         })
         proj_list[["rf"]] <- rf_proj
+        
+        # RF binary
+        rf_bin <- (rf_proj > as.numeric(sp_model$rf_thresh))*1
+        rf_bin <- mask(rf_bin, rf_proj)
+        binary_rasters[["rf"]] <- rf_bin
+        
       }
       
       # Maxent
@@ -130,6 +144,12 @@ Predict_species <- function(Env_normalized_list,
           NULL
         })
         proj_list[["maxent"]] <- maxent_proj
+        
+        # Maxent binary
+        maxent_bin <- (maxent_proj > as.numeric(sp_model$maxent_thresh))*1
+        maxent_bin <- mask(maxent_bin, maxent_proj)
+        binary_rasters[["maxent"]] <- maxent_bin
+        
       }
       
       # Stack output raster from different models
@@ -149,6 +169,18 @@ Predict_species <- function(Env_normalized_list,
       projection_path <- file.path(projection_dir, paste0(base_name, "_projection.tif"))
       writeRaster(proj_ensemble, filename = projection_path, format = "GTiff", overwrite = TRUE)
       
+      # ---- save binary projection ---
+      if (length(binary_rasters) >= 2) {
+        binary_stack <- stack(binary_rasters)
+        binary_sum <- calc(binary_stack, sum)
+        ensemble_binary <- (binary_sum >= 2)*1
+        ensemble_binary <- mask(ensemble_binary, binary_sum)
+        ensemble_binary_path <- file.path(projection_dir, paste0(base_name, "_ensemble_binary.tif"))
+        writeRaster(ensemble_binary, filename = ensemble_binary_path, format = "GTiff", overwrite = TRUE)
+      }
+      
+      rm(gam_proj, rf_proj, maxent_proj, gam_bin, rf_bin, maxent_bin)
+      
       } 
     }    
   }      
@@ -160,8 +192,51 @@ Projection_result <- Predict_species(Env_normalized_list,
                                      projection_dir = here("results", "projections","mammal"))
 
 
+# -------------4. Richness calculation ------------------------
+calculate_species_richness <- function(projection_dir, 
+                                       scenario = c("ssp126", "ssp370", "ssp585"), 
+                                       output_dir = here("results", "projections","mammal")) {
+  richness_list <- list()
+  
+  for (s in scenario){
+    cat("Processing scenario:", s, "\n")
+    
+    # get ensemble binary files
+    bin_files <- list.files(projection_dir, 
+                            pattern = paste0("_", s, "_ensemble_binary\\.tif$"), 
+                            full.names = TRUE)
+    
+    if (length(bin_files) == 0) {
+      stop("No binary maps found for scenario: ", s)
+    }
+    
+    # Read all binary files
+    bin_stack <- stack(bin_files)
+    
+    # sum
+    richness_raster <- calc(bin_stack, sum, na.rm = TRUE)
+    richness_raster <- mask(richness_raster, bin_stack[[1]])
+    
+    output_path <- file.path(output_dir, paste0("species_richness_", s, ".tif"))
+    
+    writeRaster(richness_raster, 
+                filename = output_path, 
+                format = "GTiff", 
+                datatype = "INT2U", 
+                overwrite = TRUE)
+    cat("Saved richness raster:", output_path, "\n")
+    
+    richness_list[[s]] <- richness_raster
+    
+  }
+  return(richness_list)
+}
 
-# -------------4. Uncertainty between different scenarios-------
+calculate_species_richness(projection_dir = here("results", "projections","mammal"), 
+                           scenario = c("ssp126", "ssp370", "ssp585"), 
+                           output_dir = here("results", "projections","mammal"))
+  
+# -------------5. Uncertainty between different scenarios-------
 # Define function
 calculate_uncertainty <- function(species_name, projection_dir, output_dir) {
 
