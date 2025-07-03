@@ -295,3 +295,115 @@ uncertainty_results <- lapply(species_list, function(sp) {
 # Check results
 r <- rast(here("results", "evaluations", "plant","Abronia maritima_mean_scenarios.tif"))
 plot(r)
+
+# -------------6. Write variable importance form the models-------
+library(dplyr)
+library(tibble)
+library(stringr)
+library(writexl)
+library(tools)
+
+var_order <- c("bio1", "bio3", "bio5", "bio6", "bio15", "bio17", "bio18", "bio19", 
+               "slope", "aspect", "flow_acc", "solar")
+
+
+# Function for cleaning column names
+clean_varname <- function(x) {
+  x %>%
+    str_replace_all("^s\\((.+)\\)$", "\\1") %>%      # delete s() in gam 
+    str_replace_all("\\.contribution$", "") %>%     # delete .contribution in maxent
+    str_trim()
+}
+
+# Process varimp tables
+process_varimp_unified <- function(df) {
+  df2 <- df %>%
+    select(2) %>%                         # Extract Importance 
+    rownames_to_column(var = "Variable") %>%  # Convert row name to column
+    rename(Importance = 2) %>%
+    mutate(Variable = clean_varname(Variable)) %>%
+    filter(Variable %in% var_order) %>%
+    mutate(Variable = factor(Variable, levels = var_order)) %>%
+    arrange(Variable)
+  return(df2)
+}
+
+rds_dir <- here("results", "models","bird")
+rds_files <- list.files(rds_dir, pattern = "\\.RDS$", ignore.case = TRUE, full.names = FALSE)
+
+
+all_data <- list()  
+
+for (rds_file in rds_files) {
+  rds_path <- file.path(rds_dir, rds_file)   # 关键：用完整路径读取
+  Targetmodel <- readRDS(rds_path)
+  species <- file_path_sans_ext(basename(rds_file))
+  
+  if (!is.null(Targetmodel[["rf_varimp"]])) {
+    df_rf <- process_varimp_unified(Targetmodel[["rf_varimp"]]) %>%
+      mutate(species = species, model = "rf")
+    all_data[[length(all_data) + 1]] <- df_rf
+  }
+  
+  if (!is.null(Targetmodel[["maxent_varimp"]])) {
+    df_maxent <- process_varimp_unified(Targetmodel[["maxent_varimp"]]) %>%
+      mutate(species = species, model = "maxent")
+    all_data[[length(all_data) + 1]] <- df_maxent
+  }
+  
+  if (!is.null(Targetmodel[["gam_varimp"]])) {
+    df_gam <- process_varimp_unified(Targetmodel[["gam_varimp"]]) %>%
+      mutate(species = species, model = "gam")
+    all_data[[length(all_data) + 1]] <- df_gam
+  }
+}
+
+if (length(all_data) > 0) {
+  combined_df <- bind_rows(all_data) %>%
+    select(species, model, Variable, Importance)
+  
+  out_file <- file.path(rds_dir, "all_species_varimp_combined.xlsx")
+  write_xlsx(list(all_varimp = combined_df), out_file)
+  message("Saved to：", out_file)
+} else {
+  message("No more data to be written")
+}
+
+
+library(readxl)
+rds_dir <- here("results", "evaluations")
+file_path <- file.path(rds_dir, "variable_importance.xlsx")
+
+combined_df <- read_excel(file_path, sheet = "allSpecies")
+
+# Group by species
+per_species_mean <- combined_df %>%
+  group_by(species, Variable) %>%
+  summarise(mean_importance = mean(Importance, na.rm = TRUE), .groups = "drop")
+
+across_species_summary <- per_species_mean %>%
+  group_by(Variable) %>%
+  summarise(
+    mean_of_means = mean(mean_importance, na.rm = TRUE),
+    sd_of_means = sd(mean_importance, na.rm = TRUE),
+    min_of_means = min(mean_importance, na.rm = TRUE),
+    max_of_means = max(mean_importance, na.rm = TRUE),
+    n_species = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(mean_of_means))
+
+
+library(ggplot2)
+
+ggplot(per_species_mean, aes(x = reorder(Variable, -mean_importance, median), y = mean_importance)) +
+  geom_boxplot(fill = "skyblue", outlier.color = "red", width = 0.6) +
+  labs(
+    title = "Distribution of Mean Variable Importance Across All Species",
+    x = "Variable",
+    y = "Mean Importance per Species"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
