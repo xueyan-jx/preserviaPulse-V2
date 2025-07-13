@@ -273,7 +273,7 @@ calculate_uncertainty <- function(species_name, projection_dir, output_dir) {
   r_range <- r_max - r_min
   
   # Create output dir
-  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE) 
   
   # Write to local
   writeRaster(r_mean, filename = file.path(output_dir, paste0(species_name, "_mean_scenarios.tif")),
