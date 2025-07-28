@@ -69,7 +69,7 @@ write.table(Anim_Plant_merge, file.path('data/occurrences/Anim_Plant_merge.csv')
 
 
 ## ---------------------1.4 merge Anim_Plant_merge and data from CNDDB -------------
-CNDDB <- read.csv(here("data","occurrences","CNDDB_cleaned_7.5_updated.csv"))
+CNDDB <- read.csv(here("data","occurrences","CNDDB_cleaned_7.5_updated (1).csv"))
 Anim_Plant_merge <- read.csv(here("data","occurrences","Anim_Plant_merge.csv"))
 
 CNDDB <- CNDDB %>%
