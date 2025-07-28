@@ -77,8 +77,8 @@ occ_filtered <- occ_sf %>%
 occ_in_JLDP <- st_filter(occ_filtered , JLDP_transformed, .predicate = st_intersects) #target species appear in JLDP
 
 
-# ------------- 2. Check overlap between JLDP and CWHR -------
-# --------------(1) Any overlap------------
+# ------------- 2. Any overlap -------
+# --------------(1) Check overlap between JLDP and CWHR------------
 habitat_names <- tools::file_path_sans_ext(basename(CWHR_files))
 
 shp_list_overlap <- purrr::map2(CWHR_list, habitat_names, ~ {
@@ -121,20 +121,91 @@ shp_list_clipped1 <- map2(shp_list_overlap, habitat_names_overlap, ~ {
     mutate(habitat = .y)
 })
 
-shp_combined <- bind_rows(shp_list_clipped1)
+shp_combined1 <- bind_rows(shp_list_clipped1)
 ggplot(shp_combined) +
   geom_sf(fill = "skyblue") +
   facet_wrap(~ habitat) +
   theme_minimal()
   
 ##########################################
+# --------------(2) Find species group------------
+# -------------a. For JLDP------------------------
+VIN <- shp_combined %>%
+  dplyr::filter(habitat == "VIN")
+
+occ_in_VIN <- st_filter(occ_in_JLDP , VIN, .predicate = st_intersects) 
+unique_species <- unique(occ_in_VIN$species)
+
+### Take a look at all species
+habitat_types <- unique(shp_combined$habitat)
+total_species_count_JLDP <- occ_in_JLDP %>%
+  st_drop_geometry() %>%
+  count(species, name = "total_count")
+
+# Create dataframe to store occ for habitats
+JLDPhabitat_species_stats <- data.frame()
+
+for (hab in habitat_types) {
+  # Extract habitat polygon
+  habitat_poly <- shp_combined %>% filter(habitat == hab)
+  
+  # occ in the habitat
+  occ_in_hab <- st_filter(occ_in_JLDP, habitat_poly, .predicate = st_intersects)
+  
+  # stat of each species appear in the habitat
+  species_count_in_hab <- occ_in_hab %>%
+    st_drop_geometry() %>%
+    count(species, name = "habitat_count") %>%
+    mutate(habitat = hab)
+  
+  # percentage of the occ in the habitat
+  species_count_in_hab <- species_count_in_hab %>%
+    left_join(total_species_count, by = "species") %>%
+    mutate(proportion = habitat_count / total_count)
+  
+  JLDPhabitat_species_stats <- bind_rows(JLDPhabitat_species_stats, species_count_in_hab)
+}
+
+write.csv(JLDPhabitat_species_stats, here::here("results", "habitat_species_summary_JLDP.csv"), row.names = FALSE)
+
+# -------------a. For three counties------------------------
+habitat_types <- unique(shp_combined1$habitat)
+total_species_count <- occ_filtered %>%
+  st_drop_geometry() %>%
+  count(species, name = "total_count")
+
+# Create dataframe to store occ for habitats
+habitat_species_stats <- data.frame()
+
+for (hab in habitat_types) {
+  # Extract habitat polygon
+  habitat_poly <- shp_combined1 %>% filter(habitat == hab)
+  
+  # occ in the habitat
+  occ_in_hab <- st_filter(occ_filtered, habitat_poly, .predicate = st_intersects)
+  
+  # stat of each species appear in the habitat
+  species_count_in_hab <- occ_in_hab %>%
+    st_drop_geometry() %>%
+    count(species, name = "habitat_count") %>%
+    mutate(habitat = hab)
+  
+  # percentage of the occ in the habitat
+  species_count_in_hab <- species_count_in_hab %>%
+    left_join(total_species_count, by = "species") %>%
+    mutate(proportion = habitat_count / total_count)
+  
+  habitat_species_stats <- bind_rows(habitat_species_stats, species_count_in_hab)
+}
+
+write.csv(habitat_species_stats, here::here("results", "habitat_species_summary_threeCounties.csv"), row.names = FALSE)
 
 
-# --------------2. "Endemism" of the habitats in the Preserve----
+# --------------2. "Endemism" of the habitats ----
 occ_with_habitat <- st_join(occ_in_JLDP, all_habitats_overlap, left = FALSE)
 
 
-# --------------(2)"Endemism" of the habitats in the Preserve----
+# --------------(1) Weighted Endemism of the habitats in the Preserve----
 species_occ_counts <- occ_with_habitat %>%
   group_by(species) %>%
   summarise(n_occurrences = n())
@@ -147,7 +218,7 @@ habitat_we <- occ_with_we %>%
   group_by(habitat) %>%
   summarise(total_WE = sum(WE, na.rm = TRUE))
 
-# --------------(3)"Endemism" of the habitats for three conties----
+# --------------(2)Weighted Endemism of the habitats for three conties----
 occAll_with_habitat <- st_join(occ_filtered, all_habitats_overlap, left = FALSE)
 
 species_occAll_counts <- occAll_with_habitat %>%
@@ -162,3 +233,4 @@ habitat_we_All <- occAll_with_we %>%
   group_by(habitat) %>%
   summarise(total_WE = sum(WE, na.rm = TRUE))
 
+# --------------(3) Find species group------------
