@@ -251,12 +251,12 @@ calculate_species_richness(projection_dir = here("results", "projections","Habit
 # plot(r)  
 
 ## -------------(2) Current-future difference ------------------------
-r1 <- rast("raster1.tif")
-r2 <- rast("raster2.tif")
-
-r_diff <- r1 - r2
-
-writeRaster(r_diff, here("output", "raster_diff.tif"), overwrite = TRUE)
+# r1 <- rast("raster1.tif")
+# r2 <- rast("raster2.tif")
+# 
+# r_diff <- r1 - r2
+# 
+# writeRaster(r_diff, here("output", "raster_diff.tif"), overwrite = TRUE)
 
 
 
@@ -391,31 +391,59 @@ if (length(all_data) > 0) {
 
 
 # Plot
-eval_dir <- here("results", "evaluations", "KeyHabitat","Herb")
-file_path <- file.path(eval_dir, "Herb_variable_importance.xlsx")
+eval_dir <- here("results", "evaluations", "KeyHabitat","Shrub")
+file_path <- file.path(eval_dir, "Shrub_variable_importance.xlsx")
 
 allSpecies_df <- read_excel(file_path, sheet = "allSpecies")
 bird_df <- read_excel(file_path, sheet = "Bird")
 plant_df <- read_excel(file_path, sheet = "plant")
 other_animal_df <- read_excel(file_path, sheet = "animal_on_the_ground")
 
-allSpecies_df$group <- "All species" 
-bird_df$group <- "Bird"
-plant_df$group <- "Plant"
-other_animal_df$group <- "Other animal"
-df_long <- bind_rows(allSpecies_df, bird_df, plant_df, other_animal_df)
+# allSpecies_df$group <- "All species" 
+# bird_df$group <- "Bird"
+# plant_df$group <- "Plant"
+# other_animal_df$group <- "Other animal"
+# df_long <- bind_rows(allSpecies_df, bird_df, plant_df, other_animal_df)
+# 
+# df_long <- bind_rows(allSpecies_df, bird_df, plant_df, other_animal_df) %>%
+#   distinct(species, model, Variable, .keep_all = TRUE)
+
+plant_vars <- plant_df %>% select(species, model, Variable, Importance) %>% mutate(group_tag = "Plant")
+bird_vars <- bird_df %>% select(species, model, Variable, Importance) %>% mutate(group_tag = "Bird")
+other_animal_vars <- other_animal_df %>% select(species, model, Variable, Importance) %>% mutate(group_tag = "Other animal")
+
+df_long <- bind_rows(plant_vars, bird_vars, other_animal_vars) %>%
+  mutate(all_species_flag = "All species")
+
+
+df_long <- df_long %>%
+  group_by(species, model, group_tag) %>%
+  mutate(
+    Importance_rank = rank(-Importance, ties.method = "average"),
+    Importance_norm = (Importance - min(Importance, na.rm = TRUE)) / 
+      (max(Importance, na.rm = TRUE) - min(Importance, na.rm = TRUE))
+  ) %>%
+  ungroup()
+
+all_species_df <- df_long %>%
+  mutate(group_tag = "All species")
+
+df_long <- bind_rows(df_long, all_species_df)
+
+df_long %>% count(species, model)
+
 
 summary_df <- df_long %>%
-  group_by(group, Variable) %>%
+  group_by(group_tag, Variable) %>%
   summarise(
-    median = median(Importance, na.rm = TRUE),
-    q1 = quantile(Importance, 0.25, na.rm = TRUE),
-    q3 = quantile(Importance, 0.75, na.rm = TRUE),
+    median = median(Importance_rank, na.rm = TRUE),
+    q1 = quantile(Importance_rank, 0.25, na.rm = TRUE),
+    q3 = quantile(Importance_rank, 0.75, na.rm = TRUE),
     .groups = "drop"
   )
 
 
-ggplot(summary_df, aes(x = Variable, y = median, color = group)) +
+ggplot(summary_df, aes(x = Variable, y = median, color = group_tag)) +
   geom_errorbar(aes(ymin = q1, ymax = q3), 
                 position = position_dodge(width = 0.6),
                 width = 0.2, linewidth = 0.8)  +
