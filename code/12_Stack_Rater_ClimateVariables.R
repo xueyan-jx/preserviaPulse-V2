@@ -117,3 +117,45 @@ pdf(file.path(data_dir, "chelsa_hist_selected_clim_corrplot.pdf"), width = 6, he
 corrplot(cor_matrix, method = "color", type = "upper", tl.cex = 0.8,
          addCoef.col = "black", number.cex = 0.5, diag = FALSE)
 dev.off()
+
+
+
+# Code from Xue
+library(terra)
+library(dplyr)
+library(sf)
+library(here)
+
+# Load raster template
+r_template <- rast(here("data", "env","raster_template.tif"))
+
+files <- list.files(here("data", "env","2041-2070-585"),
+                    pattern = "CHELSA.*\\.tif$", full.names = TRUE)
+
+# Reprojection (keep same resolution and crs)
+rasters <- lapply(files, function(f){
+  r <- rast(f)
+  r_proj <- project(r, r_template)
+  r_mask <- mask(r_proj, r_template)
+  return(r_mask)
+})
+
+# Stack all rasters
+env_r_stack <- rast(rasters)
+
+# Rename each layer
+layer_names <- gsub(".*(bio[0-9]+).*", "\\1", basename(files))
+nums <- as.numeric(sub("bio", "", layer_names))
+ord <- order(nums)
+env_r_stack <- env_r_stack[[ord]]
+names(env_r_stack) <- layer_names[ord]
+ 
+
+# Check the alignment of crs, resolution, and extent
+crs(env_r_stack) == crs(r_template)
+res(env_r_stack) == res(r_template) 
+ext(env_r_stack) == ext(r_template)
+
+# Write out the rasters
+out_file <- here("data", "env", "final_env_ssp585_2041_2070_stack.tif")
+writeRaster(env_r_stack, out_file, overwrite = TRUE)
