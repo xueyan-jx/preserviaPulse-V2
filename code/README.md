@@ -39,7 +39,7 @@ Example:
 | species latin name | longitude | latitude |
 
 
-## Envi_layer_elev_stack.R
+### Envi_layer_elev_stack.R
 
 The script section 1-5 generates slope, aspect, TRI, and flow accumulation layers from elevation (SRTM 30m) layer
 * Load and filter county boundaries
@@ -51,3 +51,20 @@ The script section 6 stacks climate and terrain layers
 * Clips and resamples all layers to match a common raster template provided by Lei to standardizes projection (EPSG:2229), extent, and resolution
 * Stacks layers for both current (1980–2010) and future climate scenarios (2040–2070)
 * Saves outputs in organized folders under SDM_EnvLayers/Stack_Env/
+
+### Model
+#### Input data: 
+* OSpecies occurrence points
+* Species pseudo-absence points
+* Environmental and climatic predictor variables
+
+#### R codes:
+* [22_ssdm_model.R](../code/22_ssdm_model.R)
+    * Purpose: Builds GAM, Random Forest, MaxEnt, and ensemble models for each species, and generates associated model statistics.
+* [23_model_projection.R](../code/23_model_projection.R)
+    * Purpose: Produces variable-importance plots and projects current and future species distributions, including associated uncertainty.
+
+#### Output data:
+* Model performance metrics, including AUC values
+* Variable-importance plots
+* Maps of current and projected future species distributions
