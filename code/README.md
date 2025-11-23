@@ -55,7 +55,7 @@ The script section 6 stacks climate and terrain layers
 
 ### Models and evaluation
 #### Input data: 
-* OSpecies occurrence points
+* Species occurrence points
 * Species pseudo-absence points
 * Environmental and climatic predictor variables
 
