@@ -1,4 +1,4 @@
-## Purpose of Script: Process and format CNDDB Rare Occurences Data
+## Purpose of Script: Process and format CNDDB Rare Occurrence Data
 ## Authors: GEOG 274
 ## Date: Spring, 2025 
 ## Credits to: Olivia Ross, Wenxin Yang, Jacqueline Vogel, 
@@ -9,10 +9,9 @@ librarian::shelf(sf, dplyr, here, terra, lubridate, googledrive, tigris, googles
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # READING IN RARE OCCURENCE DATA & PROJECTING TO PROJECT CRS
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#  
 # listing our occurrence data from CNDDB folder
-occurrences <- list.files(here("data/RareFind5 2"), pattern = "\\.csv$", full.names = TRUE)
+occurrences <- list.files(here("storedlocation"), pattern = "\\.csv$", full.names = TRUE)
 
 # creating empty list to store processed data
 occurrence.list <- list()
@@ -30,7 +29,7 @@ for(df in occurrences) {
   
 }
 
-# now binding all rows - all from CNDDB, and have the same column names 
+# now binding all rows 
 all <- do.call(rbind, occurrence.list)
 
 crs(all)
@@ -84,7 +83,6 @@ duplicates <- all_added_coords |>
   ungroup()
 
 # 3. clipping to target counties in case there are any sea coordinates
-
 # reloading tri-counties
 counties <- counties(state = "CA", cb = TRUE) 
 
@@ -161,7 +159,6 @@ occ_dropped <- occ_grid |>
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # MATCHING DATA FRAME TO OTHER PLANT/ANIMAL DATA
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # selecting columns we want and renaming to match other Animal-Plant merged df
 all_rare <- occ_unique|>
@@ -184,5 +181,5 @@ rare_counts <- all_rare_clean |>
   group_by(species, taxon) |>
   count()
 
-# saving this df to Olivia local 
-st_write(all_rare_clean, here("data/CNDDB_cleaned.csv"), append = FALSE)
+# saving df 
+st_write(all_rare_clean, here("stored location"), append = FALSE)

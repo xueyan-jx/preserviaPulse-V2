@@ -1,4 +1,4 @@
-## Purpose of Script: Range bagging for Rare Occurrence Data
+## Purpose of Script: Range bagging Models for Rare Occurrence Data
 ## Authors: GEOG 274
 ## Date: Spring, 2025 
 ## Credits to: Olivia Ross, Dr. Lei Song
@@ -15,7 +15,7 @@ remotes::install_github("cebra-analytics/bssdm")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # cleaned rare occurrences
-rare_occurences <- read.csv(here("data/CNDDB_cleaned.csv"))
+rare_occurences <- read.csv(here("stored data from script 41"))
 
 # reading in climate stacks 
 clim <- rast(here("data/Stack_Env/final_env_1980_2010_stack.tif"))
@@ -31,7 +31,6 @@ target_counties <- counties |>
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # CLEANING DATA FOR OUR MODELS 
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # occurrence data needs to be in WGS 84 projection with lat and lon columns 
 rare_clean <- rare_occurences |>
@@ -75,29 +74,14 @@ list2env(clim.projected, envir = .GlobalEnv)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # RUNNING THE RANGEBAG MODEL
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # running rangebag model on all species to test 
-
-# inputs, for reference
-# a) n_models: number of convex null models to build in sampled environment space (default = 100)
-# b) n_dim: number of dimensions (variables) of sampled convex hull models (default = 2)
-# c) sample_prop: prop of environment data rows sampled for fitting each convex hull (default = 0.5)
-# d) limit_occ: indicates whether to limit occurrence data to one per environment data cell (default = TRUE)
-
-
 rare.rangebag <- rangebag(clim.wgs84, rare_final, n_models = 100, 
                           n_dim = 2, 
                           sample_prop = 0.7,
                           limit_occur = FALSE)
 
 # now running prediction model on all species to test 
-
-# inputs, for reference
-# a) raw_output: can request df 
-# b) file name
-# c) parallel cores
-# d) debug
 
 current <- predict(rare.rangebag, clim.wgs84)
 
@@ -112,7 +96,7 @@ plot(pred.126)
 plot(pred.370)
 plot(pred.585)
 
-# now running the model for each individual species (9)
+# now modeling each individual species
 
 # seeing how many occurrences of each species we have 
 rare_counts <- rare_final |>
@@ -136,10 +120,8 @@ Circus_hudsonius <- rare_final |>
   filter(species == "Circus hudsonius")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
-
 # LOOPING THROUGH EACH SPECIES AND CREATING HABITAT SUITABILITY MAPS FOR EACH 
 # CLIMATE SCENARIO
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # modeling each species on a loop 
 species <- list(Circus_hudsonius = Circus_hudsonius,
@@ -191,9 +173,7 @@ for (i in seq_along(species)) {
 }
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
-
 # VIEWING RASTERS & CHECKING OUR WORK 
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 # northern harrier
 nh.current <- rast(here("data/low_occurence_current/Circus_hudsonius_current.tif"))
@@ -210,9 +190,7 @@ plot(nh.s585, main = "Northern Harrier Habitat Suitability in SSP 585 Climate Sc
 plot(target_counties, col = NA, add = TRUE)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
-
 # MODEL UNCERTAINTIES - LOADING DATA
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 library("pROC")
 
@@ -226,15 +204,14 @@ species_names <- c("Empidonax_traillii_extimus", "Falco_peregrinus_anatum",
 
 names(presences) <- species_names
 
-
 # reading in sdms for each species
-scenario_folders <- c("data/low_occurence_ssp126", "data/low_occurence_ssp370", 
+scenario_folders <- c("data/low_occurence_current", "data/low_occurence_ssp126", "data/low_occurence_ssp370", 
              "data/low_occurence_ssp585")
 
 n_species <- length(presences)
 n_scenarios <- length(scenario_folders)
 
-# creating raster lists: 1 list per species, each containing 3 rasters (one per climate scenario)
+# creating raster lists: 1 list per species, each containing 4 rasters (current + one per climate scenario)
 raster_lists <- vector("list", n_species)
 names(raster_lists) <- species_names  
 
@@ -269,9 +246,7 @@ sapply(raster_lists, length)
 r <- raster_lists[["Falco_peregrinus_anatum"]][[1]]
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
-
 # MODEL UNCERTAINTIES - AUC SCORES & TRUE SKILL STATISTIC
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 n_species <- length(presences)
 n_scenarios <- length(scenario_folders)
@@ -280,13 +255,6 @@ species_names <- names(presences)
 # constructing our AUC matrix and adding names for rows and columns
 auc_matrix <- matrix(NA, nrow = n_species, ncol = n_scenarios,
                      dimnames = list(species_names, paste0("Scenario_", LETTERS[1:n_scenarios])))
-
-library(terra)
-library(pROC)
-
-n_species <- length(presences)
-n_scenarios <- length(scenario_folders)
-species_names <- names(presences)
 
 # creating our AUC matrix
 auc_matrix <- matrix(NA, nrow = n_species, ncol = n_scenarios,
@@ -358,11 +326,6 @@ for (i in seq_along(species_names)) {
   }
 }
 
+# printing the final tables
 print(auc_matrix)
 print(tss_matrix)
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
-
-# VARIANCE BETWEEN MODEL OUTPUTS
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
