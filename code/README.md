@@ -29,7 +29,8 @@ Study area: the Dangermond Preserve in Santa Barbara county located within the t
     * Purpose: merge animal species data from multiple sources.
 * [06_postProccOcc.R](../code/06_postProccOcc.R)
     * Purpose: final clean up step to get a single model-ready occurrence data file for all species.
-
+* [07_KDE_background.R](../code/07_KDE_background.R)
+    * Purpose: generate bias-corrected background points for all species
 #### Output data:
 * Final cleaned data for all species, projected to NAD California Zone 5
 
