@@ -29,7 +29,8 @@ Study area: the Dangermond Preserve in Santa Barbara county located within the t
     * Purpose: merge animal species data from multiple sources.
 * [06_postProccOcc.R](../code/06_postProccOcc.R)
     * Purpose: final clean up step to get a single model-ready occurrence data file for all species.
-
+* [07_KDE_background.R](../code/07_KDE_background.R)
+    * Purpose: generate bias-corrected background points for all species
 #### Output data:
 * Final cleaned data for all species, projected to NAD California Zone 5
 
@@ -40,18 +41,35 @@ Example:
 | species latin name | longitude | latitude |
 
 
-### Envi_layer_elev_stack.R
+### Environmental layers
 
-The script section 1-5 generates slope, aspect, TRI, and flow accumulation layers from elevation (SRTM 30m) layer
-* Load and filter county boundaries
-* Mosaic and clip SRTM DEM
-* Compute slope, aspect, TRI, flow accumulation, and distance to coast layers
+We built a set of physical, terrain, and climate predictors for the tri-county region (Santa Barbara, Ventura, San Luis Obispo), including current (1980–2010) and future (2040–2070) climate scenarios.
 
-The script section 6 stacks climate and terrain layers
-* Load slope, aspect, flow accumulation, distance to coast, solar, and climate layers
-* Clips and resamples all layers to match a common raster template provided by Lei to standardize projection (EPSG:2229), extent, and resolution
-* Stacks layers for both current (1980–2010) and future climate scenarios (2040–2070)
-* Saves outputs in organized folders under SDM_EnvLayers/Stack_Env/
+#### Inputs
+
+* SRTM 1 Arc-Second Global DEM (USGS EarthExplorer)
+* Ecological Coastal Units (ECU) coastline layer
+* Annual solar radiation raster (ArcGIS Pro Area Solar Radiation)
+* CHELSA v2.1 bioclimatic variables (bio1–bio19, 1981–2010)
+* CHELSA CMIP6 (GFDL-ESM4, SSP126/370/585, 2040–2070)
+* Refined tri-county boundary + 100 m buffer
+* Common raster template (`raster_template.tif`, EPSG:2229)
+
+#### R codes:
+* [11_climate_stack_baseline.R](../code/11_climate_stack_baseline.R)
+  * Purpose: Preprocesses CHELSA baseline bioclimatic rasters, runs multicollinearity filtering, and saves the selected climate stack for modeling.
+* [12_env_layers_terrain_climate_stack.R](../code/12_env_layers_terrain_climate_stack.R)
+  * Purpose: Derives terrain, solar, and distance-to-coast layers, aligns them with the selected climate stack, and builds scenario-specific environmental stacks.
+* [13_full_env_stack.R](../code/13_full_env_stack.R)
+  * Purpose: Extends the current environmental stack by adding any missing CHELSA bioclimatic variables to create a full baseline predictor stack.
+
+#### Output data:
+* `final_env_1980_2010_stack.tif` – Baseline environmental stack (terrain, solar, distance to coast, selected CHELSA bioclim variables) for SDMs.  
+* `final_env_ssp126_2040_2070_stack.tif` – Future environmental stack under CHELSA CMIP6 GFDL-ESM4 SSP126.  
+* `final_env_ssp370_2040_2070_stack.tif` – Future environmental stack under CHELSA CMIP6 GFDL-ESM4 SSP370.  
+* `final_env_ssp585_2040_2070_stack.tif` – Future environmental stack under CHELSA CMIP6 GFDL-ESM4 SSP585.  
+* `full_env_1980_2010_stack.tif` – Baseline stack extended with all CHELSA bio1–bio19 plus terrain and solar (for sensitivity/alternative modeling).
+
 
 ### Models and evaluation
 #### Input data: 
@@ -71,3 +89,8 @@ The script section 6 stacks climate and terrain layers
 * Model performance metrics, including AUC values
 * Variable-importance plots
 * Maps of current and projected future species distributions, including richness distribution.
+
+#### Rangebagging Models:
+* Modeled three low occurrence species (defined as < 10 occurrences) using the bssdm package and rangebagging approach.
+* [41_LowOccurence_DataCleaning.R](../code/41_LowOccurence_DataCleaning.R) compiles and cleans CNDDB data for low occurrence species.
+* [42_LowOccurence_Rangebagging.R](../code/42_LowOccurence_Rangebagging.R) runs rangebagging models for each species and calculates the AUC score for each model.
