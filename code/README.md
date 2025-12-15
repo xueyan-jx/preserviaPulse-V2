@@ -78,11 +78,13 @@ We built a set of physical, terrain, and climate predictors for the tri-county r
 * Environmental and climatic predictor variables
 
 #### R codes:
-* [22_ssdm_model.R](../code/22_ssdm_model.R)
+* [22_sdm_model.R](../code/22_sdm_model.R)
     * Purpose: Builds GAM, Random Forest, MaxEnt, and ensemble models for each species, and generates associated model statistics.
+* [22_sdm_model_kfold.R](../code/22_sdm_model_kfold.R)
+    * Purpose: Conducts K-fold evaluation.
 * [23_model_projection.R](../code/23_model_projection.R)
     * Purpose: Projects future species distributions and calculates richness distribution for each taxon.
-* [24_model_evaluation.R](../code/24_model_evaluation.R)
+* [24_model_evaluation_summary.R](../code/24_model_evaluation_summary.R)
     * Purpose: Evaluates model uncertainty between scenarios, writes variable importance and AUC from the models, and plots percentage variable importance.
 
 #### Output data:
