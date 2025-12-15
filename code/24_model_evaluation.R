@@ -1,7 +1,8 @@
 ## Purpose of script: 
-## 1. Model uncertainty between scenarios
+## 1. Prediction uncertainty between scenarios
 ## 2. Write variable importance and AUC from the models
 ## 3. Plot percentage variable importance
+## 4. Plot variance between prediction maps (model uncertainty)
 
 ## Authors: GEOG 274
 ## Date: Spring, 2025
@@ -13,7 +14,8 @@ library(here)
 library(scales)
 library(raster)      
 library(terra)       
-library(tools)       
+library(tools)
+library(purrr)
 
 
 # -------------1. Uncertainty between different scenarios-------
@@ -146,10 +148,12 @@ if (length(all_data) > 0) {
   message("No more data to be written")
 }
 
-## -----(4) Read models and extract AUC ------
-rds_dir <- here("results", "models","Rerun","K_fold","bird")
+## -----(3) Read models and extract AUC and/or TSS ------
+# rds_dir <- here("results", "models","Rerun","K_fold","bird")
+rds_dir <- here("results", "evaluations","K_fold_auc_tss","bird")
 rds_files <- list.files(rds_dir, pattern = "\\.RDS$", ignore.case = TRUE, full.names = FALSE)
 
+# Method 1 to extract info
 all_auc <- list()
 
 for (rds_file in rds_files) {
@@ -187,6 +191,69 @@ if (length(all_auc) > 0) {
 } else {
   message("No AUC results found")
 }
+
+# Method 2 to extract AUC and TSS
+base_dir <- here("results", "evaluations", "K_fold_auc_tss", "OtherAnimal")
+file_pattern <- "_kfold\\.RDS$"
+
+rds_files <- list.files(
+  path = base_dir,
+  pattern = file_pattern,
+  full.names = TRUE, 
+  recursive = TRUE # Search in subdirectories as well, if any
+)
+
+cat("Number of RDS file:", length(rds_files), "\n")
+
+all_summary_data <- map_dfr(rds_files, function(file_path) {
+  
+  # a. Extract the species name from the file path
+  # e.g., converts "Abronia maritima_kfold.RDS" to "Abronia maritima"
+  file_name <- basename(file_path)
+  species_name <- gsub(file_pattern, "", file_name) 
+  
+  # b. Read the RDS file robustly
+  model_data <- tryCatch(
+    readRDS(file_path),
+    error = function(e) {
+      warning(paste("Failed to read file:", file_name, ". Error:", e$message))
+      return(NULL)
+    }
+  )
+  
+  # Check if the read operation was successful
+  if (is.null(model_data)) {
+    return(NULL)
+  }
+  
+  # c. Extract the target data frame ("summary_metrics")
+  summary_metrics <- model_data[["summary_metrics"]]
+  
+  # d. Add the 'Species' column and organize the data
+  if (!is.null(summary_metrics) && is.data.frame(summary_metrics)) {
+    summary_metrics %>%
+      # Add the species identifier
+      mutate(Species = species_name) %>%
+      # Reorder columns for better readability (Species first)
+      select(Species, Model, Metric, Mean, SD)
+  } else {
+    warning(paste("File", file_name, "does not contain a valid 'summary_metrics' object."))
+    return(NULL)
+  }
+})
+
+# Print the structure and the first few rows of the final consolidated data frame
+print(head(all_summary_data))
+print(dim(all_summary_data))
+
+# Optional: Save the final results to a CSV file
+
+write.csv(all_summary_data, 
+          file = here("results", "evaluations","K_fold_auc_tss","all_otherAnimal_model_summary.csv"), 
+          row.names = FALSE)
+
+
+
 
 
 # ----3. Plot ----
@@ -388,7 +455,7 @@ ggplot(summary_df2, aes(x = Variable, y = median, color = group)) +
 
 ## --------(7) Percentage variable importance plot for each species (Stacked barplot)-----
 perc_plot <- 
-#  ggplot(df_avg1, aes(x = species_label, y = Importance_pct, fill = Variable)) + #This is for all taxa
+  #  ggplot(df_avg1, aes(x = species_label, y = Importance_pct, fill = Variable)) + #This is for all taxa
   df_avg1 %>% 
   filter(group == "Plants") %>%
   ggplot(aes(x = species_label, y = Importance_pct, fill = Variable)) +
@@ -430,3 +497,127 @@ ggplot(df_plants, aes(x = Variable, y = Importance_pct)) +
     y = "Importance (%)"
   ) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+## --------(9) Variance between prediction maps (from different models)--------------
+base_output_dir <- here("results", "evaluations", "K_fold_auc_tss", "prediction_maps", "bird")
+
+# Define a function to read, process, and plot five raster layers for a single species
+plot_species_maps <- function(target_sp, base_dir) {
+  
+  cat("\nProcessing maps for species:", target_sp, "...\n")
+  
+  # --- A. Define File Paths and Names ---
+  
+  # List of all five .tif files based on the confirmed naming convention
+  files_to_read <- c(
+    ensemble_mean = paste0(base_dir, "/", target_sp, "_ensemble_mean.tif"),
+    ensemble_sd = paste0(base_dir, "/", target_sp, "_ensemble_sd_model_diff.tif"),
+    gam_sd = paste0(base_dir, "/", target_sp, "_GAM_sd.tif"),
+    rf_sd = paste0(base_dir, "/", target_sp, "_RF_sd.tif"),
+    maxent_sd = paste0(base_dir, "/", target_sp, "_MaxEnt_sd.tif")
+  )
+  
+  # Robustness check: ensure all files exist
+  if (!all(file.exists(files_to_read))) {
+    warning(paste("Error: Missing one or more .tif files for", target_sp))
+    return(NULL)
+  }
+  
+  # --- B. Read and Transform Data ---
+  
+  # Read all rasters and stack them using terra::rast
+  all_rasters <- rast(files_to_read)
+  names(all_rasters) <- c("Ensemble Mean (Prediction)", 
+                          "Model Difference (SD)", 
+                          "GAM SD (K-Fold)", 
+                          "RF SD (K-Fold)", 
+                          "MaxEnt SD (K-Fold)")
+  
+  # Convert the raster stack to a data frame for ggplot2, including coordinates (xy)
+  # na.rm = TRUE removes cells with missing values
+  map_data <- as.data.frame(all_rasters, xy = TRUE, na.rm = TRUE)
+  
+  # Convert data from wide format to long format for easy faceting in ggplot2
+  map_long <- map_data %>%
+    pivot_longer(
+      # Select all columns that are not coordinates (x or y)
+      cols = -c(x, y),
+      names_to = "Metric",
+      values_to = "Value"
+    )
+  
+  # Set the order of facets for a clean display (Must match names(all_rasters))
+  map_long$Metric <- factor(map_long$Metric, levels = names(all_rasters))
+  
+  # --- C. Plotting ---
+  
+  p <- ggplot(map_long) +
+    # Use geom_raster to plot the grid data
+    geom_raster(aes(x = x, y = y, fill = Value)) +
+    # Create five panels based on the 'Metric' column, arranged in 3 columns
+    facet_wrap(~ Metric, ncol = 3) + 
+    
+    # Color scale (Viridis is colorblind-friendly and robust)
+    scale_fill_viridis_c(
+      name = "Value", 
+      option = "plasma", 
+      direction = -1 # Reverse to make higher values brighter
+    ) +
+    
+    # Theme and Labels
+    labs(
+      title = paste("Species Distribution Model Summary for:", target_sp)
+    ) +
+    coord_equal() + # Ensure correct map aspect ratio
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+      strip.text = element_text(face = "bold", size = 10), # Subplot titles
+      legend.position = "bottom", 
+      axis.title = element_blank(), # Remove axis titles (Lon/Lat is often implicit)
+      axis.text = element_blank()  # Remove axis text for a cleaner map
+    )
+  
+  # --- D. Save the Image ---
+  
+  # Set the output filename
+  save_path <- paste0(base_dir, "/", target_sp, "_5_Panel_Summary.png")
+  # Adjust width/height as needed for your screen/report
+  ggsave(save_path, plot = p, width = 14, height = 10, units = "in", dpi = 300)
+  
+  cat("Map successfully saved to:", save_path, "\n")
+  print(p)
+  return(p)
+}
+
+# ---  Batch Execution  ---
+# List all TIF files in the output directory
+all_tif_files <- list.files(
+  path = base_output_dir,
+  pattern = "\\.tif$", # Pattern to match all files ending with .tif
+  full.names = FALSE,  # Only retrieve the file names, not the full path
+  recursive = FALSE    # Do not search subdirectories (assuming all species maps are here)
+)
+
+# Filter the list to only include one unique file type per species 
+# (e.g., the ensemble mean map) to avoid duplicates.
+# This assumes every species has a file ending in "_ensemble_mean.tif".
+ensemble_mean_files <- all_tif_files[grepl("_ensemble_mean\\.tif$", all_tif_files)]
+
+# Extract the unique species name by removing the file extension and the suffix
+# Example: "Aquila chrysaetos_ensemble_mean.tif" -> "Aquila chrysaetos"
+species_lst <- gsub("_ensemble_mean\\.tif$", "", ensemble_mean_files)
+
+# 4. Final check to ensure all names are unique (although filtering should ensure this)
+species_lst <- unique(species_lst)
+
+cat("Dynamically identified species list from TIF files:\n")
+print(species_lst)
+
+# --- Continue with the definition of plot_species_maps function and the loop call ---
+for (sp in species_lst) {
+  plot_species_maps(sp, base_output_dir)
+}
