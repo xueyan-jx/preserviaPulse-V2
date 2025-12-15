@@ -85,14 +85,10 @@ We built a set of physical, terrain, and climate predictors for the tri-county r
 * [23_model_projection.R](../code/23_model_projection.R)
     * Purpose: Projects future species distributions and calculates richness distribution for each taxon.
 * [24_model_evaluation_summary.R](../code/24_model_evaluation_summary.R)
-    * Purpose: Evaluates model uncertainty between scenarios, writes variable importance and AUC from the models, and plots percentage variable importance.
+    * Purpose: Evaluates model uncertainty between scenarios, writes variable importance and AUC from the models, plots percentage variable importance, and plots intermodel uncertainty.
 
 #### Output data:
 * Model performance metrics, including AUC values
 * Variable-importance plots
 * Maps of current and projected future species distributions, including richness distribution.
 
-#### Rangebagging Models:
-* Modeled three low occurrence species (defined as < 10 occurrences) using the bssdm package and rangebagging approach.
-* [41_LowOccurence_DataCleaning.R](../code/41_LowOccurence_DataCleaning.R) compiles and cleans CNDDB data for low occurrence species.
-* [42_LowOccurence_Rangebagging.R](../code/42_LowOccurence_Rangebagging.R) runs rangebagging models for each species and calculates the AUC score for each model.
