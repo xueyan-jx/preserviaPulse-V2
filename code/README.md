@@ -88,7 +88,8 @@ We built a set of physical, terrain, and climate predictors for the tri-county r
     * Purpose: Evaluates model uncertainty between scenarios, writes variable importance and AUC from the models, plots percentage variable importance, and plots intermodel uncertainty.
 
 #### Output data:
-* Model performance metrics, including AUC values
+* Model performance metrics, including AUC values, TSS values
 * Variable-importance plots
 * Maps of current and projected future species distributions, including richness distribution.
+* Maps of variance between prediction maps (intermodel uncertainty)
 
