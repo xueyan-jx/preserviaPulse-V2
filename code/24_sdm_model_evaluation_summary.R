@@ -79,10 +79,7 @@ uncertainty_results <- lapply(species_list, function(sp) {
 
 # -------------2. Write variable importance and AUC from the models-------
 # Order variables
-# var_order <- c("bio1", "bio3", "bio5", "bio6", "bio14", "bio15", "bio16", "bio18")
-
-var_order <- c("bio1", "bio3", "bio5", "bio6", "bio15", "bio17", "bio18", "bio19", 
-               "slope", "aspect", "flow_acc", "solar")
+var_order <- c("bio1", "bio3", "bio5", "bio6", "bio14", "bio15", "bio16", "bio18")
 
 ## ---(1) Define functions ----
 # Function for cleaning column names
@@ -149,7 +146,6 @@ if (length(all_data) > 0) {
 }
 
 ## -----(3) Read models and extract AUC and/or TSS ------
-# rds_dir <- here("results", "models","Rerun","K_fold","bird")
 rds_dir <- here("results", "evaluations","K_fold_auc_tss","bird")
 rds_files <- list.files(rds_dir, pattern = "\\.RDS$", ignore.case = TRUE, full.names = FALSE)
 
