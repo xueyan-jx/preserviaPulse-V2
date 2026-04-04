@@ -17,7 +17,8 @@ library(terra)
 library(tools)
 library(purrr)
 
-
+install.packages("openxlsx")
+library(openxlsx)
 # -------------1. Uncertainty between different scenarios-------
 ## ----- (1) Define function----
 calculate_uncertainty <- function(species_name, projection_dir, output_dir) {
@@ -189,7 +190,7 @@ if (length(all_auc) > 0) {
 }
 
 # Method 2 to extract AUC and TSS
-base_dir <- here("results", "evaluations", "K_fold_auc_tss", "OtherAnimal")
+base_dir <- here("results", "evaluations", "K_fold_auc_tss", "plant")
 file_pattern <- "_kfold\\.RDS$"
 
 rds_files <- list.files(
@@ -201,7 +202,7 @@ rds_files <- list.files(
 
 cat("Number of RDS file:", length(rds_files), "\n")
 
-all_summary_data <- map_dfr(rds_files, function(file_path) {
+all_results <- map(rds_files, function(file_path) {
   
   # a. Extract the species name from the file path
   # e.g., converts "Abronia maritima_kfold.RDS" to "Abronia maritima"
@@ -231,22 +232,44 @@ all_summary_data <- map_dfr(rds_files, function(file_path) {
       # Add the species identifier
       mutate(Species = species_name) %>%
       # Reorder columns for better readability (Species first)
-      select(Species, Model, Metric, Mean, SD)
+      dplyr::select(Species, Model, Metric, Mean, SD)
   } else {
     warning(paste("File", file_name, "does not contain a valid 'summary_metrics' object."))
     return(NULL)
   }
+  
+  # e. Extract kfold_tss
+  tss_df <- model_data[["kfold_tss"]]
+
+  if (!is.null(tss_df)) {
+    tss_df <- tss_df %>%
+      tidyr::pivot_longer(
+        cols = -any_of("Fold"), 
+        names_to = "Model", 
+        values_to = "TSS_Value"
+      ) %>%
+      mutate(Species = species_name) %>%
+      dplyr::select(Species, Fold, Model, TSS_Value)
+  }
+  
+  return(list(summary = summary_metrics, tss = tss_df))
 })
 
+final_summary_all <- map_dfr(all_results, ~ .x$summary)
+final_tss_all     <- map_dfr(all_results, ~ .x$tss)
+
 # Print the structure and the first few rows of the final consolidated data frame
-print(head(all_summary_data))
-print(dim(all_summary_data))
-
+print(head(all_results))
+ 
 # Optional: Save the final results to a CSV file
+output_path <- here("results", "evaluations", "K_fold_auc_tss", "All_plant_model_summary.xlsx")
+export_list <- list(
+  "Model_Summary" = final_summary_all, # first Sheet 
+  "Kfold_TSS_Raw" = final_tss_all      # Second Sheet
+)
 
-write.csv(all_summary_data, 
-          file = here("results", "evaluations","K_fold_auc_tss","all_otherAnimal_model_summary.csv"), 
-          row.names = FALSE)
+write.xlsx(export_list, file = output_path, overwrite = TRUE)
+
 
 
 
