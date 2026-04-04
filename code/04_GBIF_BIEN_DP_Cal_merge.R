@@ -79,12 +79,13 @@ scientific_names_df <- dat[, c("Name (common)", "Name (Latin)")]
 scientific_names <- scientific_names_df$`Name (Latin)`
 
 #-------------2. Merge records from GBIF, BIEN and DP_portal -------------
-# Read the final cleaned GBIF data and BIEN data
+
 if(!file.exists(here('data/CHELSA_bio1_1981-2010_V.2.1.tif'))){
   tmplt <- drive_get("CHELSA_bio1_1981-2010_V.2.1.tif")
   drive_download(tmplt, path=here('data/CHELSA_bio1_1981-2010_V.2.1.tif'))
 }
 
+# Read the final cleaned GBIF data and BIEN data
 # List of filenames to check and download if missing
 files_to_check <- c(
   "GBIF-plants-cleaned-0515.csv",
