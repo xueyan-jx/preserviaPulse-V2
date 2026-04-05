@@ -6,3 +6,4 @@
 */.DS_Store
 /data
 /visualization/private
+/results/evaluations/K_fold_auc_tss/
