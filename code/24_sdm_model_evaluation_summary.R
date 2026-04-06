@@ -520,7 +520,7 @@ ggplot(df_plants, aes(x = Variable, y = Importance_pct)) +
 
 
 
-## --------(9) Variance between prediction maps (from different models)--------------
+## --------(9) Variance between prediction maps (from different models - single species)--------------
 base_output_dir <- here("results", "evaluations", "K_fold_auc_tss", "prediction_maps", "bird")
 
 # Define a function to read, process, and plot five raster layers for a single species
@@ -611,6 +611,72 @@ plot_species_maps <- function(target_sp, base_dir) {
   print(p)
   return(p)
 }
+
+
+## --------(10) Variance between prediction maps (from different models - richness)--------------
+base_output_dir <- here("results", "Models", "Plant")
+file_pattern <- ".RDS$"
+
+rds_files <- list.files(
+  path = base_output_dir,
+  pattern = file_pattern,
+  full.names = TRUE, 
+  recursive = TRUE # Search in subdirectories as well, if any
+)
+
+cat("Number of RDS file:", length(rds_files), "\n")
+
+total_gam <- NULL
+total_maxent <- NULL
+total_rf <- NULL
+
+for (f in rds_files) {
+  model_data <- tryCatch(readRDS(f), error = function(e) return(NULL))
+  if (is.null(model_data)) next
+  
+  # Extract binary results for each species
+  gb <- model_data$gam_binary
+  mb <- model_data$maxent_binary
+  rb <- model_data$rf_binary
+  
+  # Get richness for each model
+  if (is.null(total_gam)) {
+    total_gam <- gb
+    total_maxent <- mb
+    total_rf <- rb
+  } else {
+    total_gam <- total_gam + gb
+    total_maxent <- total_maxent + mb
+    total_rf <- total_rf + rb
+  }
+  
+}
+
+# Model variance
+all_models_stack <- stack(total_gam, total_maxent, total_rf)
+total_sd <- calc(all_models_stack, fun=sd)
+
+# Plot
+par(mfrow = c(2, 2)) 
+plot(total_gam, main = "Bird Richness (GAM))")
+plot(total_maxent, main = "Bird Richness (Maxent)")
+plot(total_rf, main = "Bird Richness (RF)")
+plot(total_sd, 
+     main = "SD between Models (Plant)", 
+     zlim = c(0, 4),           
+     col = hcl.colors(100, palette = "Viridis", rev = TRUE)) 
+
+
+
+
+
+
+
+
+  
+
+  
+
 
 # ---  Batch Execution  ---
 # List all TIF files in the output directory
