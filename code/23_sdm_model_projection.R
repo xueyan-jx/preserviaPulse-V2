@@ -27,11 +27,11 @@ select <- dplyr::select
 # ------------ 1. Get environmental data ------------
 # Environmental data
 ## Reference data
-ref_Env <- raster::stack(here("data", "env", "final_env_1980_2010_stack.tif"))
+ref_Env <- raster::stack(here("data", "env", "final_env_1980_2010_stack_04062026.tif"))
 
 ## Projection data
-Env_files <- list.files(here("data", "env", "env_supp"), 
-                          pattern = "^final_env_ssp.*_stack\\.tif$", 
+Env_files <- list.files(here("data", "env"), 
+                          pattern = "^final_env_ssp.*_stack_04062026\\.tif$", 
                           full.names = TRUE)
 ## Normalization 
 Env_normalized_list <- lapply(Env_files, function(f) {
@@ -67,8 +67,8 @@ Env_normalized_list <- lapply(Env_files, function(f) {
 
 # ------------ 2. Function for model loop ------------
 Predict_species <- function(Env_normalized_list,
-                            model_dir = here("results", "models","Rerun", "NewEnv","Herb","OtherAnimal"),
-                            projection_dir = here("results", "projections","Rerun", "NewEnv","Herb","OtherAnimal")) {
+                            model_dir = here("results", "new","Model","plant"),
+                            projection_dir = here("results", "new", "projections","plant")) {
   
   # Get species list
   rds_files <- list.files(model_dir, pattern = "\\.RDS$", ignore.case = TRUE, full.names = FALSE)
@@ -197,15 +197,15 @@ Predict_species <- function(Env_normalized_list,
 
 # ------------ 3. Run model for all target species ------------
 Projection_result <- Predict_species(Env_normalized_list,
-                                     model_dir = here("results", "models","Rerun","NewEnv","Shrub","Bird"),
-                                     projection_dir = here("results", "projections","Rerun","NewEnv","Shrub","Bird"))
+                                     model_dir = here("results", "new","Model","plant"),
+                                     projection_dir = here("results", "new", "projections","plant"))
 
 
 # -------------4. Richness calculation ------------------------
 calculate_species_richness <- function(projection_dir, 
                                        #scenario = c("ssp126", "ssp370", "ssp585"), 
                                        scenario = c("ssp126_2011_2040", "ssp126_2041_2070", "ssp126_2071_2100"),
-                                       output_dir = here("results", "projections","Rerun","NewEnv","Herb","OtherAnimal")) {
+                                       output_dir = here("results", "new", "projections","bird")) {
   richness_list <- list()
   
   for (s in scenario){
@@ -242,9 +242,9 @@ calculate_species_richness <- function(projection_dir,
   return(richness_list)
 }
 
-calculate_species_richness(projection_dir = here("results", "projections","Rerun","NewEnv","Shrub","OtherAnimal"), 
-                           scenario = c("ssp126_2011_2040", "ssp126_2041_2070", "ssp126_2071_2100"), 
-                           output_dir = here("results", "projections","Rerun","NewEnv","Shrub","OtherAnimal"))
+calculate_species_richness(projection_dir = here("results", "new", "projections","plant"), 
+                           scenario = c("ssp585_2011_2040", "ssp585_2041_2070", "ssp585_2071_2100"), 
+                           output_dir = here("results", "new", "projections","plant"))
 
 # r <- terra::rast(here("results", "projections","Habitat","Herb","plant", "Plant_species_richness_ssp126.tif"))
 # plot(r)  

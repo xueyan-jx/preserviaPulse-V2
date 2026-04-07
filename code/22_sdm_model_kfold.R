@@ -17,8 +17,9 @@ library(rsample)
 rm(list=ls())
 #setwd("C:/Users/yzhan/Desktop/courses/geog_274")
 
-setwd("C:/Users/xyan253/OneDrive/UCSB/Class/GEOG274/preserviaPulse-V2")
-setwd("E:/OneDrive/UCSB/Class/GEOG274/preserviaPulse-V2")
+#setwd("C:/Users/xyan253/OneDrive/UCSB/Class/GEOG274/preserviaPulse-V2")
+#setwd("E:/OneDrive/UCSB/Class/GEOG274/preserviaPulse-V2")
+setwd("S:/Xue")
 
 # --- Inputs ---
 ##### Occ data
@@ -28,7 +29,7 @@ occ_pre$Presence <- 1
 
 
 ##### env_stack: RasterStack of predictors
-Env <- stack("./data/env/final_env_1980_2010_stack.tif")
+Env <- stack("./data/env/final_env_1980_2010_stack_04062026.tif")
 #Env <- Env[[c(1:3,5:12,19)]] 
 
 #Env <- Env[[c(6,10,11,12,17,7,18,9)]] 
@@ -50,33 +51,34 @@ plot(env_stack)
 
 ##### species list
 # plant list
-taxon <- "plant"
+taxon <- "plant-bird-otheranimal"
 
 # shrub
-species_lst <- c("Arctostaphylos purissima", 
-                 "Cirsium rhothophilum",
-                 "Deinandra increscens villosa",
-                 "Horkelia cuneata sericea",
-                 "Juglans californica", 
-                 "Malacothrix saxatilis saxatilis",
-                 "Mucronea californica", 
-                 "Ribes amarum hoffmannii",
-                 "Eriodictyon capitatum",
-                 "Astragalus nuttallii nuttallii",
-                 "Senecio blochmaniae")
 
-# herb
-species_lst <- c(#"Arctostaphylos purissima",
-  #"Astragalus nuttallii nuttallii",
-  #"Deinandra increscens villosa",
-  #"Horkelia cuneata sericea",
-  "Phacelia hubbyi",
-  "Abronia maritima", 
-  #"Cirsium rhothophilum",
-  "Scrophularia atrata" 
-  #"Mucronea californica"
-)
-
+# species_lst <- c("Arctostaphylos purissima", 
+#                  "Cirsium rhothophilum",
+#                  "Deinandra increscens villosa",
+#                  "Horkelia cuneata sericea",
+#                  "Juglans californica", 
+#                  "Malacothrix saxatilis saxatilis",
+#                  "Mucronea californica", 
+#                  "Ribes amarum hoffmannii",
+#                  "Eriodictyon capitatum",
+#                  "Astragalus nuttallii nuttallii",
+#                  "Senecio blochmaniae")
+# 
+# # herb
+# species_lst <- c(#"Arctostaphylos purissima",
+#   #"Astragalus nuttallii nuttallii",
+#   #"Deinandra increscens villosa",
+#   #"Horkelia cuneata sericea",
+#   "Phacelia hubbyi",
+#   "Abronia maritima", 
+#   #"Cirsium rhothophilum",
+#   "Scrophularia atrata" 
+#   #"Mucronea californica"
+# )
+ 
 # all
 species_lst <- c("Arctostaphylos purissima", 
                  "Cirsium rhothophilum",
@@ -91,47 +93,63 @@ species_lst <- c("Arctostaphylos purissima",
                  "Senecio blochmaniae",
                  "Phacelia hubbyi",
                  "Abronia maritima", 
-                 "Scrophularia atrata")
-
-taxon <- "bird"
-
-# bird in shrub
-species_lst <- c("Athene cunicularia",
-                 "Lanius ludovicianus",
-                 "Setophaga petechia",
-                 "Elanus leucurus")
-
-# bird in herb
-species_lst <- c("Athene cunicularia",
-                 "Elanus leucurus",
-                 "Pandion haliaetus",
-                 "Cepphus columba",
-                 "Lanius ludovicianus", 
-                 "Aquila chrysaetos")
-# all
-species_lst <- c("Athene cunicularia",
+                 "Scrophularia atrata",
+                 
+                 "Puma concolor",
+                 "Rana draytonii",
+                 "Taxidea taxus",
+                 "Thamnophis hammondii",
+                 "Actinemys marmorata", # herps
+                 "Danaus plexippus",
+                 
+                 "Athene cunicularia",
                  "Elanus leucurus",
                  "Pandion haliaetus",
                  "Cepphus columba",
                  "Lanius ludovicianus", 
                  "Aquila chrysaetos",
-                 "Setophaga petechia")
+                 "Setophaga petechia"
+                 )
 
-taxon <- "OtherAnimal"
-# other animals in shrub
-species_lst <- c("Rana draytonii",
-                 "Taxidea taxus",
-                 "Thamnophis hammondii",
-                 "Actinemys marmorata", # herps
-                 "Danaus plexippus") # invert
-
-# other animals in herb
-species_lst <- c("Puma concolor",
-                 "Rana draytonii",
-                 "Taxidea taxus",
-                 "Thamnophis hammondii",
-                 "Actinemys marmorata", # herps
-                 "Danaus plexippus") 
+# taxon <- "bird"
+# 
+# # bird in shrub
+# species_lst <- c("Athene cunicularia",
+#                  "Lanius ludovicianus",
+#                  "Setophaga petechia",
+#                  "Elanus leucurus")
+# 
+# # bird in herb
+# species_lst <- c("Athene cunicularia",
+#                  "Elanus leucurus",
+#                  "Pandion haliaetus",
+#                  "Cepphus columba",
+#                  "Lanius ludovicianus", 
+#                  "Aquila chrysaetos")
+# # all
+# species_lst <- c("Athene cunicularia",
+#                  "Elanus leucurus",
+#                  "Pandion haliaetus",
+#                  "Cepphus columba",
+#                  "Lanius ludovicianus", 
+#                  "Aquila chrysaetos",
+#                  "Setophaga petechia")
+# 
+# taxon <- "OtherAnimal"
+# # other animals in shrub
+# species_lst <- c("Rana draytonii",
+#                  "Taxidea taxus",
+#                  "Thamnophis hammondii",
+#                  "Actinemys marmorata", # herps
+#                  "Danaus plexippus") # invert
+# 
+# # other animals in herb
+# species_lst <- c("Puma concolor",
+#                  "Rana draytonii",
+#                  "Taxidea taxus",
+#                  "Thamnophis hammondii",
+#                  "Actinemys marmorata", # herps
+#                  "Danaus plexippus") 
 
 
 # check stats
@@ -162,7 +180,7 @@ for(j in 1:length(species_lst)){
   
   
   ##### Abs data
-  occ_abs <- read.csv("./data/sampled_background_points.csv")
+  occ_abs <- read.csv(here("data","sampled_background_points.csv"))
   occ_abs <- na.omit(occ_abs)
   occ_abs <- occ_abs[,2:3]
   occ_abs$species <- target_sp
@@ -392,7 +410,7 @@ for(j in 1:length(species_lst)){
   ensemble_sd_model_diff <- calc(ensemble_stack_means, fun=sd)
   
   
-  output_dir <- paste0("results/evaluations/K_fold_auc_tss/prediction_maps/", taxon, "/")
+  output_dir <- paste0("results/evaluations/", taxon, "/")
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
   
   writeRaster(ensemble_mean, 
